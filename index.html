@@ -1,0 +1,295 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" /> {/* Optimized viewport for mobile */}
+    <title>My Awesome Space Sim!</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;700&family=Roboto:wght@400;500&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+    <style>
+      html, body {
+        overflow: hidden;
+        width: 100%;
+        height: 100%;
+        margin: 0;
+        padding: 0;
+        font-family: 'Roboto', sans-serif; /* Default readable font for body */
+        background-color: #000; 
+      }
+      #renderCanvas {
+        width: 100%;
+        height: 100%;
+        touch-action: none; /* Prevents browser default touch actions like pinch-zoom on the canvas */
+      }
+
+      /* --- UI Controls Styling --- */
+      .ui-controls {
+        position: absolute;
+        top: 10px;
+        left: 10px;
+        background-color: rgba(0, 20, 40, 0.8); /* Slightly more opaque */
+        padding: 10px; /* Reduced padding for mobile */
+        border-radius: 8px;
+        color: #00ffea;
+        box-shadow: 0 0 10px rgba(0, 255, 234, 0.4);
+        z-index: 10;
+        font-family: 'Orbitron', sans-serif; 
+        font-size: 0.8em; /* Smaller base font for controls */
+      }
+      .ui-controls label {
+        display: block;
+        margin-bottom: 3px;
+        font-size: 0.9em;
+      }
+      .ui-controls input[type="range"] {
+        width: 120px; /* Smaller sliders */
+        margin-bottom: 8px;
+      }
+      .ui-controls .slider-group {
+        margin-bottom: 10px;
+      }
+      .ui-controls .slider-group.free-cam-only {
+        display: none; 
+      }
+      .ui-controls.free-cam-active .slider-group.free-cam-only {
+        display: block; 
+      }
+       .ui-controls.free-cam-active .slider-group.arc-cam-only {
+        display: none; 
+      }
+      .ui-controls p { 
+        font-family: 'Roboto', sans-serif;
+        font-size: 0.75em; /* Smaller 'Press C' text */
+        margin-top: 8px;
+        margin-bottom: 0;
+      }
+
+      /* --- Planet Hover Info Panel Styling --- */
+      #planetInfoPanel {
+        position: absolute;
+        background-color: rgba(10, 25, 50, 0.9);
+        border: 1px solid #00ffea;
+        color: #e0e0e0;
+        padding: 8px 12px; /* Reduced padding */
+        border-radius: 6px;
+        box-shadow: 0 0 8px rgba(0, 255, 234, 0.3);
+        z-index: 20;
+        opacity: 0;
+        transform: scale(0.95);
+        transition: opacity 0.25s ease-out, transform 0.25s ease-out;
+        pointer-events: none; 
+        font-family: 'Roboto', sans-serif; 
+        font-size: 0.8em; /* Smaller font for hover */
+        min-width: 180px; /* Adjusted min-width */
+        max-width: 250px;
+      }
+      #planetInfoPanel.visible {
+        opacity: 1;
+        transform: scale(1);
+      }
+      #planetInfoPanel h3 { 
+        margin-top: 0;
+        margin-bottom: 6px;
+        color: #00ffea;
+        font-family: 'Orbitron', sans-serif;
+        font-size: 1em; /* Smaller title */
+        text-align: center;
+      }
+      #planetInfoPanel p {
+        margin: 4px 0;
+        line-height: 1.4;
+        display: flex; 
+        align-items: center; 
+      }
+      #planetInfoPanel p i {
+        margin-right: 6px; 
+        color: #00c4b3; 
+        width: 14px; 
+        text-align: center;
+        font-size: 0.9em; /* Smaller icons */
+      }
+
+      /* --- Detailed Planet Info Panel (Bottom Sheet) --- */
+      #detailedPlanetInfoPanel {
+        position: absolute;
+        bottom: -100%; /* Start off-screen at the bottom */
+        left: 0;
+        width: 100%; 
+        max-height: 60vh; /* Max height, adjust as needed */
+        background-color: rgba(0, 10, 30, 0.95); 
+        border-top: 2px solid #00ffea; /* Border on top */
+        box-shadow: 0 -5px 20px rgba(0, 255, 234, 0.3); /* Shadow on top */
+        color: #e0e0e0;
+        padding: 15px; 
+        padding-top: 45px; /* Add padding for close button */
+        box-sizing: border-box;
+        z-index: 100;
+        overflow-y: auto;
+        transition: bottom 0.5s cubic-bezier(0.25, 0.46, 0.45, 0.94); /* Animate bottom property */
+        font-family: 'Roboto', sans-serif; 
+        font-size: 0.85em; 
+      }
+      #detailedPlanetInfoPanel.visible {
+        bottom: 0; /* Slide in from bottom */
+      }
+      #detailedPlanetInfoPanel h2 { 
+        color: #00ffea;
+        text-align: center;
+        margin-top: 0;
+        margin-bottom: 15px;
+        font-family: 'Orbitron', sans-serif;
+        font-size: 1.4em; 
+        border-bottom: 1px solid #00ffea80;
+        padding-bottom: 8px;
+      }
+      #detailedPlanetInfoPanel .detail-category {
+        margin-bottom: 15px;
+      }
+      #detailedPlanetInfoPanel .detail-category h4 { 
+        color: #70f8ff;
+        margin-bottom: 6px;
+        font-family: 'Orbitron', sans-serif;
+        font-size: 1em; 
+        border-bottom: 1px dashed #00ffea50;
+        padding-bottom: 4px;
+      }
+      #detailedPlanetInfoPanel .detail-item {
+        display: flex;
+        align-items: flex-start; 
+        margin-bottom: 5px;
+        font-size: 0.9em; 
+      }
+      #detailedPlanetInfoPanel .detail-item i {
+        margin-right: 8px;
+        color: #00c4b3;
+        width: 18px;
+        text-align: center;
+        margin-top: 2px; 
+      }
+      #detailedPlanetInfoPanel .detail-item strong {
+        color: #a0faff;
+        margin-right: 5px;
+        font-family: 'Orbitron', sans-serif; 
+        font-weight: 500; 
+      }
+      #detailedPlanetInfoPanel .close-button {
+        position: absolute;
+        top: 10px; /* Position close button at the top of the panel */
+        right: 10px; 
+        background: rgba(0,0,0,0.3);
+        border: 1px solid #00ffea80;
+        border-radius: 50%;
+        width: 30px; 
+        height: 30px; 
+        color: #00ffea;
+        font-size: 1.2em; 
+        cursor: pointer;
+        padding: 0;
+        line-height: 30px; 
+        text-align: center;
+        font-family: 'Orbitron', sans-serif; 
+      }
+       #detailedPlanetInfoPanel .close-button:hover {
+        background-color: rgba(0, 255, 234, 0.2);
+        color: #fff;
+      }
+
+      /* Media Queries for further mobile adjustments if needed */
+      @media (max-width: 400px) { /* For very small screens */
+        .ui-controls {
+          font-size: 0.7em;
+          padding: 8px;
+        }
+        .ui-controls input[type="range"] {
+          width: 100px; 
+        }
+        #detailedPlanetInfoPanel {
+          font-size: 0.8em; /* Slightly smaller font on very small screens */
+          padding-top: 40px; /* Adjust for close button */
+        }
+        #detailedPlanetInfoPanel h2 {
+            font-size: 1.2em;
+        }
+        #detailedPlanetInfoPanel .detail-category h4 {
+            font-size: 0.9em;
+        }
+      }
+
+    </style>
+  </head>
+  <body>
+    <canvas id="renderCanvas"></canvas>
+
+    <div id="uiControls" class="ui-controls">
+      <div class="slider-group free-cam-only">
+        <label for="freeCamSpeed">Free Cam Speed:</label>
+        <input type="range" id="freeCamSpeed" name="freeCamSpeed" min="0.1" max="5" step="0.1" value="1.5">
+      </div>
+      <div class="slider-group arc-cam-only">
+        <label for="arcCamZoom">Arc Cam Zoom Speed:</label>
+        <input type="range" id="arcCamZoom" name="arcCamZoom" min="1" max="100" step="1" value="50">
+      </div>
+      <p>Press 'C' to toggle camera mode.</p>
+    </div>
+
+    <div id="planetInfoPanel">
+      <h3 id="planetName">Planet Name</h3>
+      <p><i class="fas fa-globe-americas"></i><span id="planetType">Type: Rocky</span></p>
+      <p><i class="fas fa-thermometer-half"></i><span id="planetTemp">Avg. Temp: 0 °C</span></p>
+      <p><i class="fas fa-ruler-combined"></i><span id="planetSize">Size: 0 km</span></p>
+      <p><i class="fas fa-moon"></i><span id="planetMoons">Moons: 0</span></p>
+    </div>
+
+    <div id="detailedPlanetInfoPanel">
+      <button id="closeDetailedPanelButton" class="close-button" aria-label="Close panel">&times;</button>
+      <h2 id="detailedPlanetName">Planet/Star Name</h2>
+      
+      <div class="detail-category">
+        <h4><i class="fas fa-info-circle"></i> General Information</h4>
+        <p class="detail-item" id="detailedPlanetType"><strong>Type:</strong> <span></span></p>
+        <p class="detail-item" id="detailedPlanetDescription"><strong>Description:</strong> <span></span></p>
+      </div>
+
+      <div class="detail-category">
+        <h4><i class="fas fa-ruler-vertical"></i> Physical Characteristics</h4>
+        <p class="detail-item" id="detailedPlanetDiameter"><strong>Diameter:</strong> <span></span></p>
+        <p class="detail-item" id="detailedPlanetMass"><strong>Mass:</strong> <span></span></p>
+        <p class="detail-item" id="detailedPlanetGravity"><strong>Gravity:</strong> <span></span></p>
+      </div>
+
+      <div class="detail-category">
+        <h4><i class="fas fa-sync-alt"></i> Orbital & Rotational Data</h4>
+        <p class="detail-item" id="detailedOrbitalPeriod"><strong>Orbital Period:</strong> <span></span></p>
+        <p class="detail-item" id="detailedRotationPeriod"><strong>Rotation Period:</strong> <span></span></p>
+        <p class="detail-item" id="detailedAxialTilt"><strong>Axial Tilt:</strong> <span></span></p>
+      </div>
+      
+      <div class="detail-category">
+        <h4><i class="fas fa-thermometer-three-quarters"></i> Climate & Atmosphere</h4>
+        <p class="detail-item" id="detailedAvgTemp"><strong>Avg. Temperature:</strong> <span></span></p>
+        <p class="detail-item" id="detailedAtmosphere"><strong>Atmosphere:</strong> <span></span></p>
+        <p class="detail-item" id="detailedWeather"><strong>Weather Notes:</strong> <span></span></p>
+        <p class="detail-item" id="detailedSeasons"><strong>Seasons:</strong> <span></span></p>
+      </div>
+
+      <div class="detail-category">
+        <h4><i class="far fa-moon"></i> Moons & Rings</h4>
+        <p class="detail-item" id="detailedMoonsCount"><strong>Known Moons:</strong> <span></span></p>
+        <p class="detail-item" id="detailedNotableMoons"><strong>Notable Moons:</strong> <span></span></p>
+        <p class="detail-item" id="detailedRings"><strong>Rings:</strong> <span></span></p>
+      </div>
+
+       <div class="detail-category">
+        <h4><i class="fas fa-star"></i> Fun Facts</h4>
+        <p class="detail-item" id="detailedFunFact1"><span></span></p>
+        <p class="detail-item" id="detailedFunFact2"><span></span></p>
+      </div>
+
+    </div>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
