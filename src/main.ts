@@ -77,7 +77,7 @@ scene.clearColor = new Color4(0,0,0,1);
 // --- Physics Constants ---
 const G = 0.0006; // Significantly Reduced G for more stable/slower orbits
 let simulationTimeScale = 1.0; 
-const physicsTimeStep = 1 / 120; 
+const physicsTimeStep = 1 / 60; 
 let physicsAccumulator = 0;
 
 
