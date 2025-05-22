@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/vite.svg" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" /> {/* Optimized viewport for mobile */}
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
     <title>My Awesome Space Sim!</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -22,22 +22,21 @@
       #renderCanvas {
         width: 100%;
         height: 100%;
-        touch-action: none; /* Prevents browser default touch actions like pinch-zoom on the canvas */
+        touch-action: none; 
       }
-
-      /* --- UI Controls Styling --- */
+      /* UI Controls Styling */
       .ui-controls {
         position: absolute;
         top: 10px;
         left: 10px;
-        background-color: rgba(0, 20, 40, 0.8); /* Slightly more opaque */
-        padding: 10px; /* Reduced padding for mobile */
+        background-color: rgba(0, 20, 40, 0.8);
+        padding: 10px;
         border-radius: 8px;
         color: #00ffea;
         box-shadow: 0 0 10px rgba(0, 255, 234, 0.4);
         z-index: 10;
         font-family: 'Orbitron', sans-serif; 
-        font-size: 0.8em; /* Smaller base font for controls */
+        font-size: 0.8em;
       }
       .ui-controls label {
         display: block;
@@ -45,7 +44,7 @@
         font-size: 0.9em;
       }
       .ui-controls input[type="range"] {
-        width: 120px; /* Smaller sliders */
+        width: 120px;
         margin-bottom: 8px;
       }
       .ui-controls .slider-group {
@@ -60,12 +59,43 @@
        .ui-controls.free-cam-active .slider-group.arc-cam-only {
         display: none; 
       }
-      .ui-controls p { 
+      .ui-controls .key-info { 
         font-family: 'Roboto', sans-serif;
-        font-size: 0.75em; /* Smaller 'Press C' text */
+        font-size: 0.75em; 
         margin-top: 8px;
         margin-bottom: 0;
       }
+
+      /* --- On-Screen Buttons --- */
+      .on-screen-buttons {
+        position: absolute;
+        bottom: 10px;
+        right: 10px;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        z-index: 10;
+      }
+      .on-screen-buttons button {
+        background-color: rgba(0, 20, 40, 0.8);
+        border: 1px solid #00ffea;
+        color: #00ffea;
+        font-family: 'Orbitron', sans-serif;
+        font-size: 0.9em;
+        padding: 8px 12px;
+        border-radius: 5px;
+        cursor: pointer;
+        box-shadow: 0 0 8px rgba(0, 255, 234, 0.3);
+        transition: background-color 0.2s, color 0.2s;
+      }
+      .on-screen-buttons button:hover {
+        background-color: rgba(0, 255, 234, 0.2);
+        color: #fff;
+      }
+      .on-screen-buttons button i {
+        margin-right: 5px;
+      }
+
 
       /* --- Planet Hover Info Panel Styling --- */
       #planetInfoPanel {
@@ -73,7 +103,7 @@
         background-color: rgba(10, 25, 50, 0.9);
         border: 1px solid #00ffea;
         color: #e0e0e0;
-        padding: 8px 12px; /* Reduced padding */
+        padding: 8px 12px;
         border-radius: 6px;
         box-shadow: 0 0 8px rgba(0, 255, 234, 0.3);
         z-index: 20;
@@ -82,8 +112,8 @@
         transition: opacity 0.25s ease-out, transform 0.25s ease-out;
         pointer-events: none; 
         font-family: 'Roboto', sans-serif; 
-        font-size: 0.8em; /* Smaller font for hover */
-        min-width: 180px; /* Adjusted min-width */
+        font-size: 0.8em;
+        min-width: 180px;
         max-width: 250px;
       }
       #planetInfoPanel.visible {
@@ -95,7 +125,7 @@
         margin-bottom: 6px;
         color: #00ffea;
         font-family: 'Orbitron', sans-serif;
-        font-size: 1em; /* Smaller title */
+        font-size: 1em;
         text-align: center;
       }
       #planetInfoPanel p {
@@ -109,31 +139,31 @@
         color: #00c4b3; 
         width: 14px; 
         text-align: center;
-        font-size: 0.9em; /* Smaller icons */
+        font-size: 0.9em;
       }
 
-      /* --- Detailed Planet Info Panel (Bottom Sheet) --- */
+      /* --- Detailed Planet Info Panel (Mobile-First: Bottom Sheet) --- */
       #detailedPlanetInfoPanel {
-        position: absolute;
-        bottom: -100%; /* Start off-screen at the bottom */
+        position: fixed; 
+        bottom: -100vh; 
         left: 0;
         width: 100%; 
-        max-height: 60vh; /* Max height, adjust as needed */
+        max-height: 70vh; 
         background-color: rgba(0, 10, 30, 0.95); 
-        border-top: 2px solid #00ffea; /* Border on top */
-        box-shadow: 0 -5px 20px rgba(0, 255, 234, 0.3); /* Shadow on top */
+        border-top: 2px solid #00ffea; 
+        box-shadow: 0 -5px 20px rgba(0, 255, 234, 0.3); 
         color: #e0e0e0;
         padding: 15px; 
-        padding-top: 45px; /* Add padding for close button */
+        padding-top: 45px; 
         box-sizing: border-box;
         z-index: 100;
         overflow-y: auto;
-        transition: bottom 0.5s cubic-bezier(0.25, 0.46, 0.45, 0.94); /* Animate bottom property */
+        transition: bottom 0.4s cubic-bezier(0.25, 0.46, 0.45, 0.94); 
         font-family: 'Roboto', sans-serif; 
         font-size: 0.85em; 
       }
       #detailedPlanetInfoPanel.visible {
-        bottom: 0; /* Slide in from bottom */
+        bottom: 0; 
       }
       #detailedPlanetInfoPanel h2 { 
         color: #00ffea;
@@ -177,7 +207,7 @@
       }
       #detailedPlanetInfoPanel .close-button {
         position: absolute;
-        top: 10px; /* Position close button at the top of the panel */
+        top: 10px; 
         right: 10px; 
         background: rgba(0,0,0,0.3);
         border: 1px solid #00ffea80;
@@ -197,24 +227,62 @@
         color: #fff;
       }
 
-      /* Media Queries for further mobile adjustments if needed */
-      @media (max-width: 400px) { /* For very small screens */
-        .ui-controls {
-          font-size: 0.7em;
-          padding: 8px;
-        }
-        .ui-controls input[type="range"] {
-          width: 100px; 
-        }
+      /* --- Desktop Styles for Detailed Panel (Right Sidebar) --- */
+      @media (min-width: 768px) { 
         #detailedPlanetInfoPanel {
-          font-size: 0.8em; /* Slightly smaller font on very small screens */
-          padding-top: 40px; /* Adjust for close button */
+          bottom: auto; 
+          top: 0;
+          right: -400px; 
+          left: auto; 
+          width: 350px; 
+          max-height: 100vh; 
+          border-top: none; 
+          border-left: 2px solid #00ffea; 
+          box-shadow: -5px 0 20px rgba(0, 255, 234, 0.3); 
+          transition: right 0.5s cubic-bezier(0.25, 0.46, 0.45, 0.94); 
+        }
+        #detailedPlanetInfoPanel.visible {
+          right: 0; 
+          bottom: auto; 
+        }
+         .ui-controls { 
+            font-size: 0.9em;
+            padding: 15px;
+         }
+         .ui-controls input[type="range"] {
+            width: 150px;
+         }
+         #planetInfoPanel { 
+            font-size: 0.85em;
+         }
+         .on-screen-buttons { 
+            bottom: 20px;
+            right: 20px;
+         }
+      }
+
+      @media (max-width: 400px) { 
+        #detailedPlanetInfoPanel {
+          font-size: 0.8em; 
+          padding-top: 40px; 
+          max-height: 75vh; 
         }
         #detailedPlanetInfoPanel h2 {
             font-size: 1.2em;
         }
         #detailedPlanetInfoPanel .detail-category h4 {
             font-size: 0.9em;
+        }
+         .ui-controls {
+          font-size: 0.7em;
+          padding: 8px;
+        }
+        .ui-controls input[type="range"] {
+          width: 100px; 
+        }
+        .on-screen-buttons button {
+            font-size: 0.8em;
+            padding: 6px 10px;
         }
       }
 
@@ -224,6 +292,10 @@
     <canvas id="renderCanvas"></canvas>
 
     <div id="uiControls" class="ui-controls">
+      <div class="slider-group">
+        <label for="simSpeed">Sim Speed (<span id="simSpeedValue">1.0</span>x):</label>
+        <input type="range" id="simSpeed" name="simSpeed" min="0.1" max="5" step="0.1" value="1.0">
+      </div>
       <div class="slider-group free-cam-only">
         <label for="freeCamSpeed">Free Cam Speed:</label>
         <input type="range" id="freeCamSpeed" name="freeCamSpeed" min="0.1" max="5" step="0.1" value="1.5">
@@ -232,7 +304,13 @@
         <label for="arcCamZoom">Arc Cam Zoom Speed:</label>
         <input type="range" id="arcCamZoom" name="arcCamZoom" min="1" max="100" step="1" value="50">
       </div>
-      <p>Press 'C' to toggle camera mode.</p>
+      <div class="key-info">Press 'C' to toggle camera.</div>
+      <div class="key-info">Press 'O' for overview.</div>
+    </div>
+
+    <div class="on-screen-buttons">
+        <button id="toggleCameraButton"><i class="fas fa-camera-rotate"></i> Cam (C)</button>
+        <button id="toggleOverviewButton"><i class="fas fa-binoculars"></i> View (O)</button>
     </div>
 
     <div id="planetInfoPanel">

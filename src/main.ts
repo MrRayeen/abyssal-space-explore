@@ -17,6 +17,8 @@ import { Mesh } from '@babylonjs/core/Meshes/mesh';
 import { PointerEventTypes, PointerInfo } from '@babylonjs/core/Events/pointerEvents';
 import { Animation } from '@babylonjs/core/Animations/animation';
 import { EasingFunction, QuinticEase } from '@babylonjs/core/Animations/easing';
+import { LinesMesh } from '@babylonjs/core/Meshes/linesMesh';
+import { InstancedMesh } from '@babylonjs/core/Meshes/instancedMesh';
 
 // Import side effects from core for mesh building
 import "@babylonjs/core/Meshes/meshBuilder";
@@ -29,16 +31,16 @@ if (!canvas) {
 }
 
 // --- UI Elements ---
+const simSpeedSlider = document.getElementById('simSpeed') as HTMLInputElement;
+const simSpeedValueEl = document.getElementById('simSpeedValue') as HTMLSpanElement;
 const freeCamSpeedSlider = document.getElementById('freeCamSpeed') as HTMLInputElement;
 const arcCamZoomSlider = document.getElementById('arcCamZoom') as HTMLInputElement;
-// Hover Panel
 const planetInfoPanel = document.getElementById('planetInfoPanel') as HTMLDivElement;
 const planetNameEl = document.getElementById('planetName') as HTMLHeadingElement;
 const planetTypeEl = document.getElementById('planetType') as HTMLSpanElement;
 const planetTempEl = document.getElementById('planetTemp') as HTMLSpanElement;
 const planetSizeEl = document.getElementById('planetSize') as HTMLSpanElement;
 const planetMoonsEl = document.getElementById('planetMoons') as HTMLSpanElement;
-// Detailed Panel
 const detailedPlanetInfoPanel = document.getElementById('detailedPlanetInfoPanel') as HTMLDivElement;
 const closeDetailedPanelButton = document.getElementById('closeDetailedPanelButton') as HTMLButtonElement;
 const detailedPlanetNameEl = document.getElementById('detailedPlanetName') as HTMLHeadingElement;
@@ -59,7 +61,8 @@ const detailedNotableMoonsSpan = document.querySelector('#detailedNotableMoons s
 const detailedRingsSpan = document.querySelector('#detailedRings span') as HTMLSpanElement;
 const detailedFunFact1Span = document.querySelector('#detailedFunFact1 span') as HTMLSpanElement;
 const detailedFunFact2Span = document.querySelector('#detailedFunFact2 span') as HTMLSpanElement;
-
+const toggleCameraButton = document.getElementById('toggleCameraButton') as HTMLButtonElement;
+const toggleOverviewButton = document.getElementById('toggleOverviewButton') as HTMLButtonElement;
 
 // 1. Create the Babylon.js Engine
 const engine = new Engine(canvas, true, { stencil: true, preserveDrawingBuffer: true }, true);
@@ -71,6 +74,13 @@ if (!engine) {
 // 2. Create a Scene
 const scene = new Scene(engine);
 scene.clearColor = new Color4(0,0,0,1);
+
+// --- Physics Constants ---
+const G = 0.001; // Significantly Reduced G for more stable/slower orbits
+let simulationTimeScale = 1.0; 
+const physicsTimeStep = 1 / 60; 
+let physicsAccumulator = 0;
+
 
 // --- Constants for our solar system ---
 const sunSize = 6;
@@ -89,18 +99,27 @@ const plutoSize = 0.4;
 const cloudSizeRelativeToEarth = 0.04;
 const venusAtmosphereOffset = 0.05;
 
-const baseOrbitUnit = 10;
-const mercuryOrbitRadius = baseOrbitUnit * 0.8;
-const venusOrbitRadius = baseOrbitUnit * 1.2;
-const earthOrbitRadius = baseOrbitUnit * 1.7;
-const marsOrbitRadius = baseOrbitUnit * 2.5;
-const jupiterOrbitRadius = baseOrbitUnit * 4.5;
-const saturnOrbitRadius = baseOrbitUnit * 7.0;
-const uranusOrbitRadius = baseOrbitUnit * 9.5;
-const neptuneOrbitRadius = baseOrbitUnit * 12.0;
-const plutoOrbitRadius = baseOrbitUnit * 15.0;
-const moonOrbitRadius = 3.0;
-const skyboxSize = Math.max(plutoOrbitRadius * 2.5, 800);
+const baseOrbitUnit = 18; 
+const mercuryOrbitRadius = baseOrbitUnit * 0.5; 
+const venusOrbitRadius = baseOrbitUnit * 0.8;
+const earthOrbitRadius = baseOrbitUnit * 1.2; 
+const marsOrbitRadius = baseOrbitUnit * 1.8;
+const jupiterOrbitRadius = baseOrbitUnit * 4.0; 
+const saturnOrbitRadius = baseOrbitUnit * 6.5;
+const uranusOrbitRadius = baseOrbitUnit * 10.0;
+const neptuneOrbitRadius = baseOrbitUnit * 13.0;
+const plutoOrbitRadius = baseOrbitUnit * 16.0;
+
+const moonOrbitRadius = 2.8; 
+
+const asteroidBeltInnerRadius = marsOrbitRadius + 2.5;
+const asteroidBeltOuterRadius = jupiterOrbitRadius - 3.5;
+const asteroidBeltHeight = 1.0; 
+const numberOfAsteroids = 2000; 
+
+const skyboxSize = Math.max(plutoOrbitRadius * 2.0, 1000);
+
+const overviewScaleFactor = 0.5;
 
 const mercuryAxialTiltDegrees = 0.03;
 const venusAxialTiltDegrees = 177.4;
@@ -112,22 +131,27 @@ const uranusAxialTiltDegrees = 97.77;
 const neptuneAxialTiltDegrees = 28.32;
 const plutoAxialTiltDegrees = 119.59;
 
-const globalSpeedMultiplier = (0.00002 * 0.7) * 4; // User requested speed
+const visualSpeedBaseMultiplier = (0.00002 * 0.7) * 4; 
 
-const mercuryOrbitalPeriodFactor = 0.24;
-const venusOrbitalPeriodFactor = 0.62;
-const earthOrbitalPeriodFactor = 1.0;
-const marsOrbitalPeriodFactor = 1.88;
-const jupiterOrbitalPeriodFactor = 11.86;
-const saturnOrbitalPeriodFactor = 29.46;
-const uranusOrbitalPeriodFactor = 84.01;
-const neptuneOrbitalPeriodFactor = 164.8;
-const plutoOrbitalPeriodFactor = 248.0;
+// --- Relative Masses ---
+const sunMass = 10000;    // Reduced Sun's mass for better balance with smaller G
+const mercuryMass = 0.055;
+const venusMass = 0.815;
+const earthMass = 100.0;  // Kept Earth's mass high relative to other planets for Moon stability
+const moonMass = earthMass * 0.0123; 
+const marsMass = 0.107;
+const jupiterMass = 317.8; 
+const saturnMass = 95.2;
+const uranusMass = 14.5;
+const neptuneMass = 17.1;
+const plutoMass = 0.0022;
 
+
+// --- Rotational Period Factors (Relative to Earth's day) ---
 const sunRotationFactor = 27.0;
 const mercuryRotationFactor = 58.6;
 const venusRotationFactor = -243.0;
-const earthRotationFactor = 1.0;
+const earthRotationFactor = 1.0; 
 const marsRotationFactor = 1.03;
 const jupiterRotationFactor = 0.41;
 const saturnRotationFactor = 0.44;
@@ -136,37 +160,38 @@ const neptuneRotationFactor = 0.67;
 const plutoRotationFactor = -6.39;
 
 const cloudRotationSpeedRelativeToEarthSurface = 1.2;
-const moonOrbitalPeriodFactorEarthRelative = 27.3 / 365.25;
+const earthOrbitalPeriodFactorForMoon = 1.0; 
+const moonOrbitalPeriodFactorEarthRelative = 27.3 / 365.25; 
 
-const sunRotationSpeed = globalSpeedMultiplier / sunRotationFactor;
-const mercuryOrbitSpeed = globalSpeedMultiplier / mercuryOrbitalPeriodFactor;
-const mercuryRotationSpeed = globalSpeedMultiplier / mercuryRotationFactor;
-const venusOrbitSpeed = globalSpeedMultiplier / venusOrbitalPeriodFactor;
-const venusRotationSpeed = globalSpeedMultiplier / venusRotationFactor;
-const earthOrbitSpeed = globalSpeedMultiplier / earthOrbitalPeriodFactor;
-const earthRotationSpeed = globalSpeedMultiplier / earthRotationFactor;
-const marsOrbitSpeed = globalSpeedMultiplier / marsOrbitalPeriodFactor;
-const marsRotationSpeed = globalSpeedMultiplier / marsRotationFactor;
-const jupiterOrbitSpeed = globalSpeedMultiplier / jupiterOrbitalPeriodFactor;
-const jupiterRotationSpeed = globalSpeedMultiplier / jupiterRotationFactor;
-const saturnOrbitSpeed = globalSpeedMultiplier / saturnOrbitalPeriodFactor;
-const saturnRotationSpeed = globalSpeedMultiplier / saturnRotationFactor;
-const uranusOrbitSpeed = globalSpeedMultiplier / uranusOrbitalPeriodFactor;
-const uranusRotationSpeed = globalSpeedMultiplier / uranusRotationFactor;
-const neptuneOrbitSpeed = globalSpeedMultiplier / neptuneOrbitalPeriodFactor;
-const neptuneRotationSpeed = globalSpeedMultiplier / neptuneRotationFactor;
-const plutoOrbitSpeed = globalSpeedMultiplier / plutoOrbitalPeriodFactor;
-const plutoRotationSpeed = globalSpeedMultiplier / plutoRotationFactor;
 
-const moonOrbitSpeed = (globalSpeedMultiplier / earthOrbitalPeriodFactor) / moonOrbitalPeriodFactorEarthRelative;
-const moonRotationSpeed = moonOrbitSpeed;
+// --- Calculated Visual Speeds (Axial Rotation & Kinematic Orbits) ---
+const sunRotationSpeed = visualSpeedBaseMultiplier / sunRotationFactor;
+const mercuryRotationSpeed = visualSpeedBaseMultiplier / mercuryRotationFactor;
+const venusRotationSpeed = visualSpeedBaseMultiplier / venusRotationFactor;
+const earthRotationSpeed = visualSpeedBaseMultiplier / earthRotationFactor;
+const marsRotationSpeed = visualSpeedBaseMultiplier / marsRotationFactor;
+const jupiterRotationSpeed = visualSpeedBaseMultiplier / jupiterRotationFactor;
+const saturnRotationSpeed = visualSpeedBaseMultiplier / saturnRotationFactor;
+const uranusRotationSpeed = visualSpeedBaseMultiplier / uranusRotationFactor;
+const neptuneRotationSpeed = visualSpeedBaseMultiplier / neptuneRotationFactor;
+const plutoRotationSpeed = visualSpeedBaseMultiplier / plutoRotationFactor;
+
+const moonKinematicRotationSpeed = visualSpeedBaseMultiplier / earthOrbitalPeriodFactorForMoon / moonOrbitalPeriodFactorEarthRelative;
+
+
+// For asteroid belt kinematic orbit speed
+const marsOrbitalPeriodFactor = 1.88; 
+const jupiterOrbitalPeriodFactor = 11.86; 
+const marsKinematicOrbitSpeed = visualSpeedBaseMultiplier / marsOrbitalPeriodFactor;
+const jupiterKinematicOrbitSpeed = visualSpeedBaseMultiplier / jupiterOrbitalPeriodFactor;
+
 
 // 3. Create Cameras
 const arcCamera = new ArcRotateCamera("arcCamera", -Math.PI / 2, Math.PI / 2.5, earthSize * 6, Vector3.Zero(), scene);
 arcCamera.attachControl(canvas, false);
 arcCamera.minZ = 0.1;
 arcCamera.lowerRadiusLimit = earthSize * 0.5;
-arcCamera.upperRadiusLimit = skyboxSize / 2 - 50;
+arcCamera.upperRadiusLimit = skyboxSize * 0.8;
 arcCamera.wheelPrecision = 50;
 arcCamera.pinchPrecision = 50;
 arcCamera.lowerBetaLimit = 0.01;
@@ -189,6 +214,15 @@ scene.activeCamera = arcCamera;
 arcCamera.attachControl(canvas, true);
 
 // --- UI Event Listeners ---
+if (simSpeedSlider && simSpeedValueEl) {
+    simSpeedSlider.value = simulationTimeScale.toString();
+    simSpeedValueEl.textContent = simulationTimeScale.toFixed(1);
+    simSpeedSlider.addEventListener('input', (event) => {
+        simulationTimeScale = parseFloat((event.target as HTMLInputElement).value);
+        if(simSpeedValueEl) simSpeedValueEl.textContent = simulationTimeScale.toFixed(1);
+    });
+}
+
 if (freeCamSpeedSlider) {
     freeCamSpeedSlider.value = freeCamera.speed.toString();
     freeCamSpeedSlider.addEventListener('input', (event) => {
@@ -228,38 +262,139 @@ canvas.addEventListener('wheel', (event) => {
 
 let isFreeCameraMode = false;
 let isAnimatingCamera = false;
+let isOverviewMode = false;
+let previousArcCameraState: { target: Vector3, radius: number, lockedTarget: Mesh | null } | null = null;
+const orbitLines: LinesMesh[] = [];
+const originalOrbitRadii: { [planetName: string]: number } = {};
+
+// --- Function to Toggle Camera Mode ---
+function toggleCamera() {
+    if (isAnimatingCamera) return;
+    if (isOverviewMode && !isFreeCameraMode) {
+         toggleOverviewMode();
+    }
+
+    isFreeCameraMode = !isFreeCameraMode;
+    const uiControlsDiv = document.getElementById('uiControls');
+    if (isFreeCameraMode) {
+        arcCamera.detachControl();
+        arcCamera.lockedTarget = null;
+        freeCamera.position = arcCamera.position.clone();
+        const currentArcTarget = arcCamera.getTarget();
+        if (currentArcTarget) freeCamera.setTarget(currentArcTarget.clone()); else freeCamera.setTarget(Vector3.Zero());
+        scene.activeCamera = freeCamera;
+        freeCamera.attachControl(canvas, true);
+        if (uiControlsDiv) uiControlsDiv.classList.add('free-cam-active');
+        if (detailedPlanetInfoPanel) detailedPlanetInfoPanel.classList.remove('visible');
+        isDetailedPanelOpen = false;
+        console.log("Switched to Free Camera Mode");
+    } else {
+        freeCamera.detachControl();
+        scene.activeCamera = arcCamera;
+        arcCamera.attachControl(canvas, true);
+        const targetMesh = currentFocusedMesh || defaultArcTarget || planets["earth"]?.sphere;
+        if (targetMesh) arcCamera.lockedTarget = targetMesh;
+        if (uiControlsDiv) uiControlsDiv.classList.remove('free-cam-active');
+        console.log("Switched to Arc Rotate Camera Mode");
+    }
+}
+
+
+// --- Function to Toggle Overview Mode ---
+function toggleOverviewMode() {
+    if (isAnimatingCamera) return;
+
+    if (isFreeCameraMode) {
+        toggleCamera();
+    }
+
+    isOverviewMode = !isOverviewMode;
+    isAnimatingCamera = true;
+    const easingFunction = new QuinticEase();
+    easingFunction.setEasingMode(EasingFunction.EASINGMODE_EASEOUT);
+    const overviewAnimationFrames = 90;
+
+    const targetSunPosition = sunSphere ? sunSphere.position.clone() : Vector3.Zero();
+
+    planetDataArray.forEach(pData => {
+        if (pData.name.toLowerCase() === "sun" || pData.name.toLowerCase() === "moon") return;
+
+        const system = planets[pData.name.toLowerCase()];
+        if (system && system.sphere && system.orbitLine) {
+            system.orbitLine.isVisible = isOverviewMode;
+        }
+    });
+
+
+    if (isOverviewMode) {
+        console.log("Entering Overview Mode");
+        previousArcCameraState = {
+            target: arcCamera.target.clone(),
+            radius: arcCamera.radius,
+            lockedTarget: arcCamera.lockedTarget
+        };
+        arcCamera.lockedTarget = null;
+
+        Animation.CreateAndStartAnimation(
+            "overviewTarget", arcCamera, "target", 30, overviewAnimationFrames,
+            arcCamera.target, targetSunPosition,
+            Animation.ANIMATIONLOOPMODE_CONSTANT, easingFunction
+        );
+        Animation.CreateAndStartAnimation(
+            "overviewRadius", arcCamera, "radius", 30, overviewAnimationFrames,
+            arcCamera.radius, plutoOrbitRadius * 1.8, 
+            Animation.ANIMATIONLOOPMODE_CONSTANT, easingFunction,
+            () => { isAnimatingCamera = false; }
+        );
+        if (detailedPlanetInfoPanel) detailedPlanetInfoPanel.classList.remove('visible');
+        isDetailedPanelOpen = false;
+
+    } else {
+        console.log("Exiting Overview Mode");
+        if (previousArcCameraState) {
+            Animation.CreateAndStartAnimation(
+                "restoreTarget", arcCamera, "target", 30, overviewAnimationFrames,
+                arcCamera.target, previousArcCameraState.target,
+                Animation.ANIMATIONLOOPMODE_CONSTANT, easingFunction
+            );
+            Animation.CreateAndStartAnimation(
+                "restoreRadius", arcCamera, "radius", 30, overviewAnimationFrames,
+                arcCamera.radius, previousArcCameraState.radius,
+                Animation.ANIMATIONLOOPMODE_CONSTANT, easingFunction,
+                () => {
+                    isAnimatingCamera = false;
+                    if (previousArcCameraState?.lockedTarget) {
+                        arcCamera.lockedTarget = previousArcCameraState.lockedTarget;
+                    }
+                    previousArcCameraState = null;
+                }
+            );
+        } else {
+            const targetMesh = defaultArcTarget || planets["earth"]?.sphere;
+            if (targetMesh) arcCamera.lockedTarget = targetMesh;
+            arcCamera.radius = (targetMesh?.getBoundingInfo().boundingSphere.radiusWorld || earthSize) * 6;
+            isAnimatingCamera = false;
+        }
+        orbitLines.forEach(line => { if(line) line.isVisible = false; });
+    }
+}
+
+
 window.addEventListener("keydown", (event) => {
     if (event.key === "c" || event.key === "C") {
-        if (isAnimatingCamera) return;
-
-        isFreeCameraMode = !isFreeCameraMode;
-        const uiControlsDiv = document.getElementById('uiControls');
-        if (isFreeCameraMode) {
-            arcCamera.detachControl();
-            arcCamera.lockedTarget = null;
-            freeCamera.position = arcCamera.position.clone();
-            const currentArcTarget = arcCamera.getTarget();
-            if (currentArcTarget) freeCamera.setTarget(currentArcTarget.clone()); else freeCamera.setTarget(Vector3.Zero());
-
-            scene.activeCamera = freeCamera;
-            freeCamera.attachControl(canvas, true);
-            if (uiControlsDiv) uiControlsDiv.classList.add('free-cam-active');
-            if (detailedPlanetInfoPanel) detailedPlanetInfoPanel.classList.remove('visible');
-            isDetailedPanelOpen = false;
-            console.log("Switched to Free Camera Mode");
-        } else {
-            freeCamera.detachControl();
-            scene.activeCamera = arcCamera;
-            arcCamera.attachControl(canvas, true);
-            const targetMesh = currentFocusedMesh || defaultArcTarget || planets["earth"]?.sphere;
-            if (targetMesh) {
-                arcCamera.lockedTarget = targetMesh;
-            }
-            if (uiControlsDiv) uiControlsDiv.classList.remove('free-cam-active');
-            console.log("Switched to Arc Rotate Camera Mode");
-        }
+        toggleCamera();
+    } else if (event.key === "o" || event.key === "O") {
+        toggleOverviewMode();
     }
 });
+
+if (toggleCameraButton) {
+    toggleCameraButton.addEventListener('click', toggleCamera);
+}
+if (toggleOverviewButton) {
+    toggleOverviewButton.addEventListener('click', toggleOverviewMode);
+}
+
 
 // 4. Create Lights
 const ambientLight = new HemisphericLight("ambientLight", new Vector3(0.3, 1, 0.1), scene);
@@ -282,6 +417,8 @@ sunMaterial.emissiveTexture = sunTexture;
 sunMaterial.disableLighting = true;
 sunSphere.material = sunMaterial;
 sunLight.parent = sunSphere;
+(sunSphere as any).mass = sunMass;
+(sunSphere as any).velocity = Vector3.Zero();
 
 // 6. Create Skybox
 const skybox = MeshBuilder.CreateBox("skyBox", { size: skyboxSize }, scene);
@@ -298,10 +435,14 @@ skybox.infiniteDistance = true;
 // --- Planet Creation Function (Helper) ---
 interface PlanetSystem {
     sphere: Mesh;
-    orbitAnchor: TransformNode;
+    orbitAnchor?: TransformNode; 
     atmosphereSphere?: Mesh;
     ringMesh?: Mesh;
     info: PlanetInfoData;
+    orbitLine?: LinesMesh;
+    originalOrbitRadius: number;
+    mass: number;
+    velocity: Vector3;
 }
 interface PlanetInfoData {
     name: string; type: string; tempC: string; sizeKm: string; moonsCount: string;
@@ -312,15 +453,31 @@ interface PlanetInfoData {
 
 function createCelestialBody(
     name: string, diameter: number, orbitRadius: number, textureUrl: string,
-    scene: Scene, axialTiltDegrees: number, info: PlanetInfoData, orbitAnchorParent?: TransformNode
+    scene: Scene, axialTiltDegrees: number, info: PlanetInfoData, mass: number,
+    isMoon: boolean = false 
 ): PlanetSystem {
-    const orbitAnchor = new TransformNode(`${name}OrbitAnchor`, scene);
-    if (orbitAnchorParent) orbitAnchor.parent = orbitAnchorParent;
-
+    
     const sphere = MeshBuilder.CreateSphere(name, { diameter, segments: 64 }, scene);
-    sphere.position.x = orbitRadius;
-    sphere.parent = orbitAnchor;
+    let orbitAnchor: TransformNode | undefined = undefined;
+
     (sphere as any).planetInfo = info;
+    originalOrbitRadii[name.toLowerCase()] = orbitRadius; 
+    (sphere as any).mass = mass;
+    (sphere as any).velocity = Vector3.Zero(); // Initialize velocity
+
+    if (isMoon && planets["earth"] && planets["earth"].sphere) { 
+        // Moon's initial position relative to Earth
+        sphere.position = planets["earth"].sphere.position.add(new Vector3(orbitRadius, 0, 0));
+        // Moon's initial velocity to orbit Earth (added to Earth's velocity)
+        const earthVelocity = (planets["earth"].sphere as any).velocity as Vector3 || Vector3.Zero();
+        const moonOrbitalSpeedAroundEarth = Math.sqrt((G * earthMass) / orbitRadius);
+        (sphere as any).velocity.copyFrom(earthVelocity).addInPlace(new Vector3(0,0,-moonOrbitalSpeedAroundEarth));
+    } else if (name !== "sun") { // Planets orbiting the Sun
+        sphere.position = new Vector3(orbitRadius, 0, 0);
+        const initialOrbitalSpeed = Math.sqrt((G * sunMass) / orbitRadius);
+        (sphere as any).velocity = new Vector3(0, 0, -initialOrbitalSpeed);
+    }
+
 
     const material = new StandardMaterial(`${name}Mat`, scene);
     const diffuseTexture = new Texture(textureUrl, scene, undefined, true, Texture.BILINEAR_SAMPLINGMODE,
@@ -344,8 +501,81 @@ function createCelestialBody(
         const tiltQuaternion = Quaternion.RotationAxis(Vector3.Right(), tiltRad);
         sphere.rotationQuaternion = tiltQuaternion;
     }
-    return { sphere, orbitAnchor, info };
+
+    let orbitLine: LinesMesh | undefined = undefined;
+    if (!isMoon && name !== "sun") { 
+        const points = [];
+        const segments = 100;
+        for (let i = 0; i <= segments; i++) {
+            const angle = (i / segments) * Math.PI * 2;
+            points.push(new Vector3(Math.cos(angle) * orbitRadius, 0, Math.sin(angle) * orbitRadius));
+        }
+        orbitLine = MeshBuilder.CreateLines(`${name}OrbitLine`, { points: points }, scene);
+        orbitLine.color = new Color3(0.3, 0.3, 0.4);
+        orbitLine.alpha = 0.4;
+        orbitLine.isVisible = false; 
+        orbitLines.push(orbitLine);
+    }
+
+    return { sphere, orbitAnchor, info, orbitLine, originalOrbitRadius: orbitRadius, mass, velocity: (sphere as any).velocity };
 }
+
+// --- Asteroid Belt Creation ---
+let asteroidBeltNode: TransformNode | null = null;
+
+function createAsteroidBelt(scene: Scene): TransformNode {
+    const asteroidMaterial = new StandardMaterial("asteroidMat", scene);
+    asteroidMaterial.diffuseColor = new Color3(0.5, 0.45, 0.4);
+    asteroidMaterial.specularColor = new Color3(0.15, 0.15, 0.15);
+    asteroidMaterial.specularPower = 16;
+
+    const baseAsteroidShapes: Mesh[] = [];
+    const baseAsteroid1 = MeshBuilder.CreateIcoSphere("baseAsteroid1", { radius: 0.08, subdivisions: 0 }, scene);
+    baseAsteroidShapes.push(baseAsteroid1);
+    const baseAsteroid2 = MeshBuilder.CreateIcoSphere("baseAsteroid2", { radius: 0.1, subdivisions: 1 }, scene);
+    baseAsteroidShapes.push(baseAsteroid2);
+    const baseAsteroid3 = MeshBuilder.CreateSphere("baseAsteroid3", { diameter: 0.18, segments: 6 }, scene);
+    baseAsteroidShapes.push(baseAsteroid3);
+
+    baseAsteroidShapes.forEach(shape => {
+        shape.material = asteroidMaterial;
+        shape.isVisible = false;
+    });
+
+    const beltAnchor = new TransformNode("asteroidBeltAnchorNode", scene);
+    const currentMarsKinematicOrbitSpeed = visualSpeedBaseMultiplier / marsOrbitalPeriodFactor;
+    const currentJupiterKinematicOrbitSpeed = visualSpeedBaseMultiplier / jupiterOrbitalPeriodFactor;
+    const asteroidBeltOrbitSpeed = (currentMarsKinematicOrbitSpeed + currentJupiterKinematicOrbitSpeed) / 2 * 0.6;
+    (beltAnchor as any).orbitSpeed = asteroidBeltOrbitSpeed;
+
+
+    for (let i = 0; i < numberOfAsteroids; i++) {
+        const baseShape = baseAsteroidShapes[Math.floor(Math.random() * baseAsteroidShapes.length)];
+        const instance = baseShape.createInstance(`asteroid${i}`);
+        instance.parent = beltAnchor;
+
+        const angle = Math.random() * Math.PI * 2;
+        let radius = asteroidBeltInnerRadius + Math.random() * (asteroidBeltOuterRadius - asteroidBeltInnerRadius);
+        radius = Math.max(asteroidBeltInnerRadius * 0.8, Math.min(radius, asteroidBeltOuterRadius * 1.2));
+
+        const x = Math.cos(angle) * radius;
+        const z = Math.sin(angle) * radius;
+        const y = (Math.random() - 0.5) * asteroidBeltHeight;
+        instance.position = new Vector3(x, y, z);
+
+        instance.rotationQuaternion = Quaternion.RotationYawPitchRoll(
+            Math.random() * Math.PI * 2,
+            Math.random() * Math.PI * 2,
+            Math.random() * Math.PI * 2
+        );
+
+        const scaleVariation = 0.4 + Math.random() * 1.2;
+        instance.scaling = new Vector3(scaleVariation, scaleVariation * (0.7 + Math.random() * 0.6), scaleVariation * (0.7 + Math.random() * 0.6));
+    }
+    console.log(`${numberOfAsteroids} asteroids created.`);
+    return beltAnchor;
+}
+
 
 // --- Create Solar System ---
 const planets: { [key: string]: PlanetSystem } = {};
@@ -364,38 +594,35 @@ const planetInfoDatabase: { [key: string]: PlanetInfoData } = { // Populated as 
 };
 
 (planetInfoDatabase.sun as any).planetInfo = planetInfoDatabase.sun;
+(sunSphere as any).mass = sunMass;
+(sunSphere as any).velocity = Vector3.Zero();
 
 const planetDataArray = [
-    planetInfoDatabase.sun, planetInfoDatabase.mercury, planetInfoDatabase.venus, planetInfoDatabase.earth, planetInfoDatabase.mars,
+    planetInfoDatabase.mercury, planetInfoDatabase.venus, planetInfoDatabase.earth, planetInfoDatabase.mars,
     planetInfoDatabase.jupiter, planetInfoDatabase.saturn, planetInfoDatabase.uranus, planetInfoDatabase.neptune,
     planetInfoDatabase.pluto
 ];
 
 planetDataArray.forEach(pInfo => {
-    if (pInfo.name.toLowerCase() === "sun") {
-        (sunSphere as any).planetInfo = pInfo;
-        return;
-    }
-
     let currentSize = 1, currentOrbit = 10, currentTilt = 0;
-    let currentRotSpeed = 0, currentOrbSpeed = 0;
+    let currentMass = 1;
     let currentTexture = `/${pInfo.name.toLowerCase()}.jpg`;
 
     switch(pInfo.name.toLowerCase()) {
-        case "mercury": currentSize = mercurySize; currentOrbit = mercuryOrbitRadius; currentTilt = mercuryAxialTiltDegrees; currentRotSpeed = mercuryRotationSpeed; currentOrbSpeed = mercuryOrbitSpeed; break;
-        case "venus": currentSize = venusSize; currentOrbit = venusOrbitRadius; currentTilt = venusAxialTiltDegrees; currentRotSpeed = venusRotationSpeed; currentOrbSpeed = venusOrbitSpeed; currentTexture = "/venus_surface.jpg"; break;
-        case "earth": currentSize = earthSize; currentOrbit = earthOrbitRadius; currentTilt = earthAxialTiltDegrees; currentRotSpeed = earthRotationSpeed; currentOrbSpeed = earthOrbitSpeed; break;
-        case "mars": currentSize = marsSize; currentOrbit = marsOrbitRadius; currentTilt = marsAxialTiltDegrees; currentRotSpeed = marsRotationSpeed; currentOrbSpeed = marsOrbitSpeed; break;
-        case "jupiter": currentSize = jupiterSize; currentOrbit = jupiterOrbitRadius; currentTilt = jupiterAxialTiltDegrees; currentRotSpeed = jupiterRotationSpeed; currentOrbSpeed = jupiterOrbitSpeed; break;
-        case "saturn": currentSize = saturnSize; currentOrbit = saturnOrbitRadius; currentTilt = saturnAxialTiltDegrees; currentRotSpeed = saturnRotationSpeed; currentOrbSpeed = saturnOrbitSpeed; break;
-        case "uranus": currentSize = uranusSize; currentOrbit = uranusOrbitRadius; currentTilt = uranusAxialTiltDegrees; currentRotSpeed = uranusRotationSpeed; currentOrbSpeed = uranusOrbitSpeed; break;
-        case "neptune": currentSize = neptuneSize; currentOrbit = neptuneOrbitRadius; currentTilt = neptuneAxialTiltDegrees; currentRotSpeed = neptuneRotationSpeed; currentOrbSpeed = neptuneOrbitSpeed; break;
-        case "pluto": currentSize = plutoSize; currentOrbit = plutoOrbitRadius; currentTilt = plutoAxialTiltDegrees; currentRotSpeed = plutoRotationSpeed; currentOrbSpeed = plutoOrbitSpeed; break;
+        case "mercury": currentSize = mercurySize; currentOrbit = mercuryOrbitRadius; currentTilt = mercuryAxialTiltDegrees; currentMass = mercuryMass; currentTexture = "/mercury.jpg"; break;
+        case "venus": currentSize = venusSize; currentOrbit = venusOrbitRadius; currentTilt = venusAxialTiltDegrees; currentMass = venusMass; currentTexture = "/venus_surface.jpg"; break;
+        case "earth": currentSize = earthSize; currentOrbit = earthOrbitRadius; currentTilt = earthAxialTiltDegrees; currentMass = earthMass; currentTexture = "/earth.jpg"; break;
+        case "mars": currentSize = marsSize; currentOrbit = marsOrbitRadius; currentTilt = marsAxialTiltDegrees; currentMass = marsMass; currentTexture = "/mars.jpg"; break;
+        case "jupiter": currentSize = jupiterSize; currentOrbit = jupiterOrbitRadius; currentTilt = jupiterAxialTiltDegrees; currentMass = jupiterMass; currentTexture = "/jupiter.jpg"; break;
+        case "saturn": currentSize = saturnSize; currentOrbit = saturnOrbitRadius; currentTilt = saturnAxialTiltDegrees; currentMass = saturnMass; currentTexture = "/saturn.jpg"; break;
+        case "uranus": currentSize = uranusSize; currentOrbit = uranusOrbitRadius; currentTilt = uranusAxialTiltDegrees; currentMass = uranusMass; currentTexture = "/uranus.jpg"; break;
+        case "neptune": currentSize = neptuneSize; currentOrbit = neptuneOrbitRadius; currentTilt = neptuneAxialTiltDegrees; currentMass = neptuneMass; currentTexture = "/neptune.jpg"; break;
+        case "pluto": currentSize = plutoSize; currentOrbit = plutoOrbitRadius; currentTilt = plutoAxialTiltDegrees; currentMass = plutoMass; currentTexture = "/pluto.jpg"; break;
     }
 
-    planets[pInfo.name.toLowerCase()] = createCelestialBody(pInfo.name.toLowerCase(), currentSize, currentOrbit, currentTexture, scene, currentTilt, pInfo);
-    (planets[pInfo.name.toLowerCase()].orbitAnchor as any).orbitSpeed = currentOrbSpeed;
-    (planets[pInfo.name.toLowerCase()].sphere as any).rotationSpeed = currentRotSpeed;
+    planets[pInfo.name.toLowerCase()] = createCelestialBody(pInfo.name.toLowerCase(), currentSize, currentOrbit, currentTexture, scene, currentTilt, pInfo, currentMass);
+    (planets[pInfo.name.toLowerCase()].sphere as any).rotationSpeed = (visualSpeedBaseMultiplier / (planetInfoDatabase as any)[pInfo.name.toLowerCase()].rotationPeriodFactor) || 0;
+
 });
 
 
@@ -403,7 +630,7 @@ const earthSphereFromSystem = planets["earth"]?.sphere;
 if (earthSphereFromSystem) {
     defaultArcTarget = earthSphereFromSystem;
     if (scene.activeCamera === arcCamera) {
-        arcCamera.lockedTarget = earthSphereFromSystem; // Lock to Earth initially
+        arcCamera.lockedTarget = earthSphereFromSystem;
     }
 }
 
@@ -482,18 +709,23 @@ if (earthSystemForClouds && earthSystemForClouds.sphere) {
     (cloudSphere as any).isAtmosphere = true;
 }
 
-// Moon
-const earthSphereForMoon = planets["earth"]?.sphere;
-if (earthSphereForMoon) {
-    const { sphere: moonSphere, orbitAnchor: moonOrbitAnchor } = createCelestialBody("moon", moonSize, moonOrbitRadius, "/moon.jpg", scene, 0, planetInfoDatabase.moon, earthSphereForMoon);
-    planets["moon"] = { sphere: moonSphere, orbitAnchor: moonOrbitAnchor, info: planetInfoDatabase.moon };
-    (planets["moon"].orbitAnchor as any).orbitSpeed = moonOrbitSpeed;
-    (planets["moon"].sphere as any).rotationSpeed = moonRotationSpeed;
-    if (moonSphere.material instanceof StandardMaterial && moonSphere.material.diffuseTexture) {
-        (moonSphere.material.diffuseTexture as Texture).vScale = -1;
-        (moonSphere.material.diffuseTexture as Texture).uScale = -1;
-    }
+// Moon - Now physics-based
+const earthForMoonSystem = planets["earth"];
+if (earthForMoonSystem && earthForMoonSystem.sphere) {
+    const moonSystem = createCelestialBody("moon", moonSize, moonOrbitRadius, "/moon.jpg", scene, 0, planetInfoDatabase.moon, moonMass, true /* isMoon = true */);
+    planets["moon"] = moonSystem;
+    // Initial position relative to Earth for Moon
+    moonSystem.sphere.position = earthForMoonSystem.sphere.position.add(new Vector3(moonOrbitRadius, 0, 0));
+    // Initial velocity for Moon to orbit Earth (added to Earth's velocity)
+    const earthVelocity = (earthForMoonSystem.sphere as any).velocity as Vector3;
+    const moonOrbitalSpeedAroundEarth = Math.sqrt((G * earthMass) / moonOrbitRadius);
+    moonSystem.velocity.copyFrom(earthVelocity).addInPlace(new Vector3(0,0,-moonOrbitalSpeedAroundEarth));
+    (moonSystem.sphere as any).rotationSpeed = moonKinematicRotationSpeed; // Still use kinematic for axial spin for simplicity
 }
+
+
+// --- Create Asteroid Belt ---
+asteroidBeltNode = createAsteroidBelt(scene); 
 
 // Shadow Generator
 const shadowGenerator = new ShadowGenerator(2048, sunLight);
@@ -552,32 +784,28 @@ function hideDetailedInfo(revertToDefaultTarget: boolean = false) {
     isDetailedPanelOpen = false;
     
     if (revertToDefaultTarget && scene.activeCamera === arcCamera) {
-        arcCamera.lockedTarget = null; // Unlock from specific planet
+        arcCamera.lockedTarget = null; 
         const targetMesh = defaultArcTarget || planets["earth"]?.sphere;
         if (targetMesh) {
             isAnimatingCamera = true;
             const easingFunction = new QuinticEase();
             easingFunction.setEasingMode(EasingFunction.EASINGMODE_EASEOUT);
-            // Animate target position - No, just set lockedTarget
-            arcCamera.lockedTarget = targetMesh; // Re-lock to default
-            // Animate radius
+            
+            arcCamera.lockedTarget = targetMesh; 
             Animation.CreateAndStartAnimation(
-                "cameraReturnRadius", arcCamera, "radius", 30, 75, // 2.5 seconds
-                arcCamera.radius, (targetMesh.getBoundingInfo().boundingSphere.radiusWorld * 3) + earthSize * 2.0, // Adjust radius
+                "cameraReturnRadius", arcCamera, "radius", 30, 90, 
+                arcCamera.radius, (targetMesh.getBoundingInfo().boundingSphere.radiusWorld * 3) + earthSize * 3.0, 
                 Animation.ANIMATIONLOOPMODE_CONSTANT, easingFunction,
-                 () => { isAnimatingCamera = false; } // Reset flag on completion
+                 () => { isAnimatingCamera = false; } 
             );
         }
-        currentFocusedMesh = null; // Clear specific focus when reverting
+        currentFocusedMesh = null;
     }
-    // If not reverting by clicking X, currentFocusedMesh remains, and camera stays locked if it was.
 }
 
 if(closeDetailedPanelButton) {
     closeDetailedPanelButton.addEventListener('click', () => hideDetailedInfo(false)); 
 }
-
-// REMOVED: canvas.addEventListener('pointerdown', ...) for outside click to close. Panel only closes via 'X' button.
 
 
 scene.onPointerObservable.add((pointerInfo: PointerInfo) => {
@@ -626,7 +854,7 @@ scene.onPointerObservable.add((pointerInfo: PointerInfo) => {
             if (planetInfo) {
                 isAnimatingCamera = true;
                 currentFocusedMesh = pickedMesh; 
-                defaultArcTarget = pickedMesh;   // Update default target to this newly clicked planet
+                defaultArcTarget = pickedMesh;
 
                 if (scene.activeCamera === freeCamera) {
                     isFreeCameraMode = false;
@@ -644,7 +872,7 @@ scene.onPointerObservable.add((pointerInfo: PointerInfo) => {
                 easingFunction.setEasingMode(EasingFunction.EASINGMODE_EASEOUT);
 
                 Animation.CreateAndStartAnimation(
-                    "cameraRadius", arcCamera, "radius", 30, 75, // 2.5 seconds
+                    "cameraRadius", arcCamera, "radius", 30, 90,
                     arcCamera.radius,
                     (pickedMesh.getBoundingInfo().boundingSphere.radiusWorld * 3) + (pickedMesh.name === "sunSphere" ? sunSize : earthSize) * 2.0,
                     Animation.ANIMATIONLOOPMODE_CONSTANT, easingFunction,
@@ -660,43 +888,110 @@ scene.onPointerObservable.add((pointerInfo: PointerInfo) => {
 });
 
 
-// Animation
+// Animation / Physics Loop
 scene.onBeforeRenderObservable.add(() => {
-    const deltaTime = engine.getDeltaTime();
-    if (deltaTime > 100) return;
+    const engineDeltaTime = engine.getDeltaTime(); 
+    if (engineDeltaTime > 100) return; 
 
-    const sunRotationDelta = sunRotationSpeed * deltaTime;
+    const scaledDeltaTimeForPhysics = (engineDeltaTime / 1000.0) * simulationTimeScale; 
+    const scaledDeltaTimeForVisuals = engineDeltaTime * simulationTimeScale;
+
+
+    physicsAccumulator += scaledDeltaTimeForPhysics;
+
+    while (physicsAccumulator >= physicsTimeStep) {
+        // Calculate forces and update velocities for all planets (excluding Sun) and Moon
+        const allPhysicsBodies = [...planetDataArray.filter(p => p.name.toLowerCase() !== "sun"), planetInfoDatabase.moon];
+        
+        allPhysicsBodies.forEach(pInfo => {
+            const bodySystem = planets[pInfo.name.toLowerCase()];
+            if (!bodySystem || !bodySystem.sphere || !(bodySystem.sphere as any).mass || !(bodySystem.sphere as any).velocity) return;
+
+            const bodySphere = bodySystem.sphere;
+            const bodyMass = (bodySphere as any).mass;
+            const bodyVelocity = (bodySphere as any).velocity as Vector3;
+            let netForce = Vector3.Zero();
+
+            // Force from Sun
+            const toSun = sunSphere.position.subtract(bodySphere.position);
+            const distSqSun = toSun.lengthSquared();
+            if (distSqSun > 0) {
+                const forceMagSun = (G * sunMass * bodyMass) / distSqSun;
+                netForce.addInPlace(toSun.normalize().scale(forceMagSun));
+            }
+
+            // If this body is the Moon, add force from Earth
+            if (pInfo.name.toLowerCase() === "moon" && planets["earth"]?.sphere) {
+                const earthSphere = planets["earth"].sphere;
+                const toEarth = earthSphere.position.subtract(bodySphere.position);
+                const distSqEarth = toEarth.lengthSquared();
+                if (distSqEarth > 0) {
+                    const forceMagEarth = (G * earthMass * bodyMass) / distSqEarth; // Earth's mass pulls Moon
+                    netForce.addInPlace(toEarth.normalize().scale(forceMagEarth));
+                }
+            }
+            // If this body is Earth, add force from Moon
+            else if (pInfo.name.toLowerCase() === "earth" && planets["moon"]?.sphere) {
+                const moonSphere = planets["moon"].sphere;
+                const toMoon = moonSphere.position.subtract(bodySphere.position);
+                const distSqMoon = toMoon.lengthSquared();
+                if (distSqMoon > 0) {
+                    const forceMagMoon = (G * moonMass * bodyMass) / distSqMoon;
+                    netForce.addInPlace(toMoon.normalize().scale(forceMagMoon));
+                }
+            }
+            
+            const acceleration = netForce.scale(1 / bodyMass);
+            bodyVelocity.addInPlace(acceleration.scale(physicsTimeStep)); 
+        });
+
+        // Update positions for all planets and Moon based on new velocities
+         allPhysicsBodies.forEach(pInfo => {
+            const bodySystem = planets[pInfo.name.toLowerCase()];
+            if (bodySystem && bodySystem.sphere && (bodySystem.sphere as any).velocity) {
+                const bodySphere = bodySystem.sphere;
+                const bodyVelocity = (bodySphere as any).velocity as Vector3;
+                bodySphere.position.addInPlace(bodyVelocity.scale(physicsTimeStep)); 
+            }
+        });
+        
+        physicsAccumulator -= physicsTimeStep;
+    }
+
+
+    // Visual Rotations
+    const sunRotationDelta = sunRotationSpeed * scaledDeltaTimeForVisuals;
     if(sunSphere) sunSphere.rotate(Vector3.Up(), sunRotationDelta, Space.LOCAL);
 
-    planetDataArray.forEach(pInfo => {
-        if (pInfo.name.toLowerCase() === "sun") return;
+    if (asteroidBeltNode) {
+        const beltSpeed = (asteroidBeltNode as any).orbitSpeed || 0; 
+        asteroidBeltNode.rotation.y += beltSpeed * scaledDeltaTimeForVisuals;
+    }
+
+    planetDataArray.forEach(pInfo => { 
+        if (pInfo.name.toLowerCase() === "sun") return; 
 
         const system = planets[pInfo.name.toLowerCase()];
-        if (system && system.orbitAnchor && system.sphere) {
-            const orbitSpeed = (system.orbitAnchor as any).orbitSpeed || 0;
-            system.orbitAnchor.rotation.y += orbitSpeed * deltaTime;
-
+        if (system && system.sphere) { 
             const rotationSpeed = (system.sphere as any).rotationSpeed || 0;
-            const rotationAmount = rotationSpeed * deltaTime;
+            const rotationAmount = rotationSpeed * scaledDeltaTimeForVisuals;
             system.sphere.rotate(Vector3.Up(), rotationAmount, Space.LOCAL);
 
             if (pInfo.name.toLowerCase() === "earth" && (system as any).cloudSphere) {
-                const cloudRotationDelta = (earthRotationSpeed * cloudRotationSpeedRelativeToEarthSurface) * deltaTime;
+                const cloudRotationDelta = (earthRotationSpeed * cloudRotationSpeedRelativeToEarthSurface) * scaledDeltaTimeForVisuals;
                 (system as any).cloudSphere.rotate(Vector3.Up(), cloudRotationDelta, Space.LOCAL);
             }
             if (pInfo.name.toLowerCase() === "venus" && system.atmosphereSphere) {
-                 system.atmosphereSphere.rotate(Vector3.Up(), venusRotationSpeed * 0.8 * deltaTime, Space.LOCAL);
+                 system.atmosphereSphere.rotate(Vector3.Up(), venusRotationSpeed * 0.8 * scaledDeltaTimeForVisuals, Space.LOCAL);
             }
         }
     });
 
+    // Moon's axial rotation (visual, tidally locked to its kinematic orbit speed)
     const moonSystem = planets["moon"];
-    if (moonSystem && moonSystem.orbitAnchor && moonSystem.sphere) {
-        const moonOrbitS = (moonSystem.orbitAnchor as any).orbitSpeed || 0;
-        moonSystem.orbitAnchor.rotation.y += moonOrbitS * deltaTime;
-
-        const moonRotS = (moonSystem.sphere as any).rotationSpeed || 0;
-        moonSystem.sphere.rotate(Vector3.Up(), moonRotS * deltaTime, Space.LOCAL);
+    if (moonSystem && moonSystem.sphere) {
+        const moonRotS = (moonSystem.sphere as any).rotationSpeed || 0; 
+        moonSystem.sphere.rotate(Vector3.Up(), moonRotS * scaledDeltaTimeForVisuals, Space.LOCAL);
     }
 });
 
@@ -712,4 +1007,4 @@ window.addEventListener('resize', () => {
     engine.resize();
 });
 
-console.log("Babylon.js with Vite setup complete! Full solar system with UI elements and detailed panel should be rendering. 😊🎉");
+console.log("Babylon.js with Vite setup complete! Full solar system with Gravity (Phase 2) and Sim Speed Control should be rendering. 😊🎉");
