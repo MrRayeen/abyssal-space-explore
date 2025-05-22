@@ -18,6 +18,7 @@ import { PointerEventTypes, PointerInfo } from '@babylonjs/core/Events/pointerEv
 import { Animation } from '@babylonjs/core/Animations/animation';
 import { EasingFunction, QuinticEase } from '@babylonjs/core/Animations/easing';
 import { LinesMesh } from '@babylonjs/core/Meshes/linesMesh';
+import { NoiseProceduralTexture } from '@babylonjs/core/Materials/Textures/Procedurals/noiseProceduralTexture'; 
 
 // Import side effects from core for mesh building
 import "@babylonjs/core/Meshes/meshBuilder";
@@ -74,8 +75,8 @@ if (!engine) {
 const scene = new Scene(engine);
 scene.clearColor = new Color4(0,0,0,1);
 
-// --- Physics Constants ---
-const G = 0.0006; // Significantly Reduced G for more stable/slower orbits
+// --- User Provided Physics Constants ---
+const G = 0.0006; 
 let simulationTimeScale = 1.0; 
 const physicsTimeStep = 1 / 60; 
 let physicsAccumulator = 0;
@@ -86,39 +87,69 @@ const sunSize = 6;
 const mercurySize = 0.7;
 const venusSize = 1.9;
 const earthSize = 2;
-const moonSize = 0.5;
+const moonSize = 0.5; // Earth's Moon
 const marsSize = 1.1;
 const jupiterSize = 4.5;
 const saturnSize = 4;
 const saturnRingOuterRadius = saturnSize * 2.2;
+const saturnRingInnerRadius = saturnSize * 1.1; 
+const saturnRingThickness = 0.05; 
+const numberOfSaturnRingParticles = 2500; 
+
 const uranusSize = 3;
 const neptuneSize = 2.9;
 const plutoSize = 0.4;
 
+// Moon Sizes
+const ioSize = 0.4; 
+const europaSize = 0.35;
+const titanSize = 0.6;
+const rheaSize = 0.25;
+const phobosSize = 0.05; // Mars' moons are tiny
+const deimosSize = 0.03;
+const ganymedeSize = 0.55; // Jupiter's largest
+const callistoSize = 0.5;
+const enceladusSize = 0.08; // Saturn's moon
+const mimasSize = 0.06;
+
+
 const cloudSizeRelativeToEarth = 0.04;
 const venusAtmosphereOffset = 0.05;
 
-const baseOrbitUnit = 18; 
-const mercuryOrbitRadius = baseOrbitUnit * 0.5; 
-const venusOrbitRadius = baseOrbitUnit * 0.8;
-const earthOrbitRadius = baseOrbitUnit * 1.2; 
-const marsOrbitRadius = baseOrbitUnit * 1.8;
-const jupiterOrbitRadius = baseOrbitUnit * 4.0; 
-const saturnOrbitRadius = baseOrbitUnit * 6.5;
-const uranusOrbitRadius = baseOrbitUnit * 10.0;
-const neptuneOrbitRadius = baseOrbitUnit * 13.0;
-const plutoOrbitRadius = baseOrbitUnit * 16.0;
+const baseOrbitUnit = 35; 
+const mercuryOrbitRadius = baseOrbitUnit * 0.39; 
+const venusOrbitRadius = baseOrbitUnit * 0.72;  
+const earthOrbitRadius = baseOrbitUnit * 1.0;   
+const marsOrbitRadius = baseOrbitUnit * 1.52;   
+const jupiterOrbitRadius = baseOrbitUnit * 5.2;  
+const saturnOrbitRadius = baseOrbitUnit * 9.58;  
+const uranusOrbitRadius = baseOrbitUnit * 19.22; 
+const neptuneOrbitRadius = baseOrbitUnit * 30.05;
+const plutoOrbitRadius = baseOrbitUnit * 39.48;  
 
-const moonOrbitRadius = 2.8; 
+const moonOrbitRadius = 2.5; // Relative to Earth
 
-const asteroidBeltInnerRadius = marsOrbitRadius + 2.5;
-const asteroidBeltOuterRadius = jupiterOrbitRadius - 3.5;
-const asteroidBeltHeight = 1.0; 
-const numberOfAsteroids = 2000; 
+// New Moon Orbital Radii (relative to their parent planet's center)
+const ioOrbitRadius = jupiterSize * 1.5; 
+const europaOrbitRadius = jupiterSize * 2.2;
+const ganymedeOrbitRadius = jupiterSize * 3.0;
+const callistoOrbitRadius = jupiterSize * 4.2;
+const titanOrbitRadius = saturnSize * 3.0;
+const rheaOrbitRadius = saturnSize * 1.3;
+const enceladusOrbitRadius = saturnSize * 0.8;
+const mimasOrbitRadius = saturnSize * 0.6;
+const phobosOrbitRadius = marsSize * 1.5; // Very close to Mars
+const deimosOrbitRadius = marsSize * 2.5;
 
-const skyboxSize = Math.max(plutoOrbitRadius * 2.0, 1000);
 
-// const overviewScaleFactor = 0.5;
+const asteroidBeltInnerRadius = marsOrbitRadius + 5; 
+const asteroidBeltOuterRadius = jupiterOrbitRadius - 8; 
+const asteroidBeltHeight = 2.0; 
+const numberOfAsteroids = 1000; 
+
+
+const skyboxSize = Math.max(plutoOrbitRadius * 2.2, 1800); 
+// const overviewScaleFactor = 0.5; 
 
 const mercuryAxialTiltDegrees = 0.03;
 const venusAxialTiltDegrees = 177.4;
@@ -129,27 +160,66 @@ const saturnAxialTiltDegrees = 26.73;
 const uranusAxialTiltDegrees = 97.77;
 const neptuneAxialTiltDegrees = 28.32;
 const plutoAxialTiltDegrees = 119.59;
+const ioAxialTiltDegrees = 0;
+const europaAxialTiltDegrees = 0;
+const titanAxialTiltDegrees = 0;
+const rheaAxialTiltDegrees = 0;
+const phobosAxialTiltDegrees = 0;
+const deimosAxialTiltDegrees = 0;
+const ganymedeAxialTiltDegrees = 0;
+const callistoAxialTiltDegrees = 0;
+const enceladusAxialTiltDegrees = 0;
+const mimasAxialTiltDegrees = 0;
+
 
 const visualSpeedBaseMultiplier = (0.00002 * 0.7) * 4; 
 
-// --- Relative Masses ---
-const sunMass = 9000;    // Reduced Sun's mass for better balance with smaller G
+// --- User Provided Relative Masses ---
+const sunMass = 9500;
 const mercuryMass = 0.055;
 const venusMass = 0.815;
-const earthMass = 400.0;  // Kept Earth's mass high relative to other planets for Moon stability
+const earthMass = 200.0;  
 const moonMass = earthMass * 0.0123; 
-const marsMass = 0.107;
+const marsMass = 50.0;
 const jupiterMass = 317.8; 
 const saturnMass = 95.2;
 const uranusMass = 14.5;
 const neptuneMass = 17.1;
 const plutoMass = 0.0022;
+// New Moon Masses
+const ioMass = jupiterMass * 0.000047; 
+const europaMass = jupiterMass * 0.000025;
+const ganymedeMass = jupiterMass * 0.000078; // Largest moon in solar system
+const callistoMass = jupiterMass * 0.000057;
+const titanMass = saturnMass * 0.0023;
+const rheaMass = saturnMass * 0.000039;
+const enceladusMass = saturnMass * 0.0000018; // Tiny but geologically active
+const mimasMass = saturnMass * 0.00000063; // "Death Star" moon
+const phobosMass = marsMass * 0.0000000017; // Very small
+const deimosMass = marsMass * 0.00000000024; // Even smaller
 
 
 // --- Rotational Period Factors (Relative to Earth's day) ---
 const sunRotationFactor = 27.0;
+const mercuryRotationFactor = 58.6;
 const venusRotationFactor = -243.0;
 const earthRotationFactor = 1.0; 
+const marsRotationFactor = 1.03;
+const jupiterRotationFactor = 0.41;
+const saturnRotationFactor = 0.44;
+const uranusRotationFactor = -0.72;
+const neptuneRotationFactor = 0.67;
+const plutoRotationFactor = -6.39;
+const ioRotationFactor = 1.77; 
+const europaRotationFactor = 3.55; 
+const ganymedeRotationFactor = 7.15;
+const callistoRotationFactor = 16.69;
+const titanRotationFactor = 15.95; 
+const rheaRotationFactor = 4.52; 
+const enceladusRotationFactor = 1.37;
+const mimasRotationFactor = 0.94;
+const phobosRotationFactor = 0.319; // Tidally locked
+const deimosRotationFactor = 1.26; // Tidally locked
 
 
 const cloudRotationSpeedRelativeToEarthSurface = 1.2;
@@ -157,18 +227,35 @@ const earthOrbitalPeriodFactorForMoon = 1.0;
 const moonOrbitalPeriodFactorEarthRelative = 27.3 / 365.25; 
 
 
-// --- Calculated Visual Speeds (Axial Rotation & Kinematic Orbits) ---
+// --- Calculated Visual Speeds (Axial Rotation) ---
 const sunRotationSpeed = visualSpeedBaseMultiplier / sunRotationFactor;
+const mercuryRotationSpeed = visualSpeedBaseMultiplier / mercuryRotationFactor;
 const venusRotationSpeed = visualSpeedBaseMultiplier / venusRotationFactor;
 const earthRotationSpeed = visualSpeedBaseMultiplier / earthRotationFactor;
-
-
-const moonKinematicRotationSpeed = visualSpeedBaseMultiplier / earthOrbitalPeriodFactorForMoon / moonOrbitalPeriodFactorEarthRelative;
+const marsRotationSpeed = visualSpeedBaseMultiplier / marsRotationFactor;
+const jupiterRotationSpeed = visualSpeedBaseMultiplier / jupiterRotationFactor;
+const saturnRotationSpeed = visualSpeedBaseMultiplier / saturnRotationFactor;
+const uranusRotationSpeed = visualSpeedBaseMultiplier / uranusRotationFactor;
+const neptuneRotationSpeed = visualSpeedBaseMultiplier / neptuneRotationFactor;
+const plutoRotationSpeed = visualSpeedBaseMultiplier / plutoRotationFactor;
+const moonAxialRotationSpeed = visualSpeedBaseMultiplier / earthOrbitalPeriodFactorForMoon / moonOrbitalPeriodFactorEarthRelative;
+const ioAxialRotationSpeed = visualSpeedBaseMultiplier / ioRotationFactor;
+const europaAxialRotationSpeed = visualSpeedBaseMultiplier / europaRotationFactor;
+const ganymedeAxialRotationSpeed = visualSpeedBaseMultiplier / ganymedeRotationFactor;
+const callistoAxialRotationSpeed = visualSpeedBaseMultiplier / callistoRotationFactor;
+const titanAxialRotationSpeed = visualSpeedBaseMultiplier / titanRotationFactor;
+const rheaAxialRotationSpeed = visualSpeedBaseMultiplier / rheaRotationFactor;
+const enceladusAxialRotationSpeed = visualSpeedBaseMultiplier / enceladusRotationFactor;
+const mimasAxialRotationSpeed = visualSpeedBaseMultiplier / mimasRotationFactor;
+const phobosAxialRotationSpeed = visualSpeedBaseMultiplier / phobosRotationFactor;
+const deimosAxialRotationSpeed = visualSpeedBaseMultiplier / deimosRotationFactor;
 
 
 // For asteroid belt kinematic orbit speed
 const marsOrbitalPeriodFactor = 1.88; 
 const jupiterOrbitalPeriodFactor = 11.86; 
+const marsKinematicOrbitSpeed = visualSpeedBaseMultiplier / marsOrbitalPeriodFactor;
+const jupiterKinematicOrbitSpeed = visualSpeedBaseMultiplier / jupiterOrbitalPeriodFactor;
 
 
 // 3. Create Cameras
@@ -176,7 +263,7 @@ const arcCamera = new ArcRotateCamera("arcCamera", -Math.PI / 2, Math.PI / 2.5, 
 arcCamera.attachControl(canvas, false);
 arcCamera.minZ = 0.1;
 arcCamera.lowerRadiusLimit = earthSize * 0.5;
-arcCamera.upperRadiusLimit = skyboxSize * 0.8;
+arcCamera.upperRadiusLimit = skyboxSize * 0.9; 
 arcCamera.wheelPrecision = 50;
 arcCamera.pinchPrecision = 50;
 arcCamera.lowerBetaLimit = 0.01;
@@ -249,8 +336,8 @@ let isFreeCameraMode = false;
 let isAnimatingCamera = false;
 let isOverviewMode = false;
 let previousArcCameraState: { target: Vector3, radius: number, lockedTarget: Mesh | null } | null = null;
-const orbitLines: LinesMesh[] = [];
-const originalOrbitRadii: { [planetName: string]: number } = {};
+const orbitLines: LinesMesh[] = []; 
+const originalOrbitRadii: { [planetName: string]: number } = {}; 
 
 // --- Function to Toggle Camera Mode ---
 function toggleCamera() {
@@ -301,14 +388,8 @@ function toggleOverviewMode() {
 
     const targetSunPosition = sunSphere ? sunSphere.position.clone() : Vector3.Zero();
 
-    planetDataArray.forEach(pData => {
-        if (pData.name.toLowerCase() === "sun" || pData.name.toLowerCase() === "moon") return;
-
-        const system = planets[pData.name.toLowerCase()];
-        if (system && system.sphere && system.orbitLine) {
-            system.orbitLine.isVisible = isOverviewMode;
-        }
-    });
+    // Toggle visibility of static orbit lines
+    orbitLines.forEach(line => { if(line) line.isVisible = isOverviewMode; });
 
 
     if (isOverviewMode) {
@@ -327,7 +408,7 @@ function toggleOverviewMode() {
         );
         Animation.CreateAndStartAnimation(
             "overviewRadius", arcCamera, "radius", 30, overviewAnimationFrames,
-            arcCamera.radius, plutoOrbitRadius * 1.8, 
+            arcCamera.radius, plutoOrbitRadius * 2.0, 
             Animation.ANIMATIONLOOPMODE_CONSTANT, easingFunction,
             () => { isAnimatingCamera = false; }
         );
@@ -360,7 +441,6 @@ function toggleOverviewMode() {
             arcCamera.radius = (targetMesh?.getBoundingInfo().boundingSphere.radiusWorld || earthSize) * 6;
             isAnimatingCamera = false;
         }
-        orbitLines.forEach(line => { if(line) line.isVisible = false; });
     }
 }
 
@@ -404,6 +484,7 @@ sunSphere.material = sunMaterial;
 sunLight.parent = sunSphere;
 (sunSphere as any).mass = sunMass;
 (sunSphere as any).velocity = Vector3.Zero();
+(sunSphere as any).axialRotationSpeed = sunRotationSpeed; 
 
 // 6. Create Skybox
 const skybox = MeshBuilder.CreateBox("skyBox", { size: skyboxSize }, scene);
@@ -420,14 +501,14 @@ skybox.infiniteDistance = true;
 // --- Planet Creation Function (Helper) ---
 interface PlanetSystem {
     sphere: Mesh;
-    orbitAnchor?: TransformNode; 
     atmosphereSphere?: Mesh;
-    ringMesh?: Mesh;
+    ringParticlesAnchor?: TransformNode;
     info: PlanetInfoData;
-    orbitLine?: LinesMesh;
+    orbitLine?: LinesMesh; 
     originalOrbitRadius: number;
     mass: number;
     velocity: Vector3;
+    axialRotationSpeed: number; 
 }
 interface PlanetInfoData {
     name: string; type: string; tempC: string; sizeKm: string; moonsCount: string;
@@ -437,45 +518,84 @@ interface PlanetInfoData {
 }
 
 function createCelestialBody(
-    name: string, diameter: number, orbitRadius: number, textureUrl: string,
+    name: string, diameter: number, orbitRadius: number, textureUrlOrColor: string | Color3 | null,
     scene: Scene, axialTiltDegrees: number, info: PlanetInfoData, mass: number,
-    isMoon: boolean = false 
+    axialRotationSpeed: number, 
+    isMoon: boolean = false, 
+    primaryBody?: Mesh, 
+    moonMaterialColor?: Color3 
 ): PlanetSystem {
     
-    const sphere = MeshBuilder.CreateSphere(name, { diameter, segments: 64 }, scene);
-    let orbitAnchor: TransformNode | undefined = undefined;
-
+    const sphere = MeshBuilder.CreateSphere(name, { diameter, segments: 32 }, scene);
+    
     (sphere as any).planetInfo = info;
     originalOrbitRadii[name.toLowerCase()] = orbitRadius; 
     (sphere as any).mass = mass;
-    (sphere as any).velocity = Vector3.Zero(); // Initialize velocity
+    (sphere as any).velocity = Vector3.Zero(); 
+    (sphere as any).axialRotationSpeed = axialRotationSpeed; 
 
-    if (isMoon && planets["earth"] && planets["earth"].sphere) { 
-        // Moon's initial position relative to Earth
-        sphere.position = planets["earth"].sphere.position.add(new Vector3(orbitRadius, 0, 0));
-        // Moon's initial velocity to orbit Earth (added to Earth's velocity)
-        const earthVelocity = (planets["earth"].sphere as any).velocity as Vector3 || Vector3.Zero();
-        const moonOrbitalSpeedAroundEarth = Math.sqrt((G * earthMass) / orbitRadius);
-        (sphere as any).velocity.copyFrom(earthVelocity).addInPlace(new Vector3(0,0,-moonOrbitalSpeedAroundEarth));
-    } else if (name !== "sun") { // Planets orbiting the Sun
+    if (isMoon && primaryBody) { 
+        sphere.position = primaryBody.position.add(new Vector3(orbitRadius, 0, 0));
+        const primaryVelocity = (primaryBody as any).velocity as Vector3 || Vector3.Zero();
+        const primaryMass = (primaryBody as any).mass as number || earthMass; 
+        const moonOrbitalSpeedAroundPrimary = Math.sqrt((G * primaryMass) / orbitRadius);
+        (sphere as any).velocity.copyFrom(primaryVelocity).addInPlace(new Vector3(0,0,-moonOrbitalSpeedAroundPrimary));
+    } else if (name !== "sun") { 
         sphere.position = new Vector3(orbitRadius, 0, 0);
-        const initialOrbitalSpeed = Math.sqrt((G * sunMass) / orbitRadius);
+        const initialOrbitalSpeed = Math.sqrt((G * sunMass) / orbitRadius) * 0.95; 
         (sphere as any).velocity = new Vector3(0, 0, -initialOrbitalSpeed);
     }
 
 
     const material = new StandardMaterial(`${name}Mat`, scene);
-    const diffuseTexture = new Texture(textureUrl, scene, undefined, true, Texture.BILINEAR_SAMPLINGMODE,
-        () => {
-            console.log(`Texture ${textureUrl} for ${name} loaded.`);
-            if (diffuseTexture) {
-                diffuseTexture.vScale = -1; diffuseTexture.uScale = -1;
-                if (name === "sun") { diffuseTexture.vScale = 1; diffuseTexture.uScale = 1; }
-            }
-        },
-        (m,e) => console.error(`Texture ${textureUrl} for ${name} error:`, m, e)
-    );
-    material.diffuseTexture = diffuseTexture;
+    if (typeof textureUrlOrColor === 'string') {
+        const diffuseTexture = new Texture(textureUrlOrColor, scene, undefined, true, Texture.BILINEAR_SAMPLINGMODE,
+            () => {
+                console.log(`Texture ${textureUrlOrColor} for ${name} loaded.`);
+                if (diffuseTexture) {
+                    diffuseTexture.vScale = -1; diffuseTexture.uScale = -1;
+                    if (name === "sun") { diffuseTexture.vScale = 1; diffuseTexture.uScale = 1; }
+                }
+            },
+            (m,e) => console.error(`Texture ${textureUrlOrColor} for ${name} error:`, m, e)
+        );
+        material.diffuseTexture = diffuseTexture;
+    } else if (textureUrlOrColor instanceof Color3) { 
+        material.diffuseColor = textureUrlOrColor;
+        const noiseTexture = new NoiseProceduralTexture(`${name}Noise`, 256, scene);
+        noiseTexture.brightness = 0.6; 
+        noiseTexture.octaves = 6;      
+        noiseTexture.persistence = 0.8; 
+        noiseTexture.animationSpeedFactor = 0; 
+        material.diffuseTexture = noiseTexture; 
+        
+        const bumpNoiseTexture = new NoiseProceduralTexture(`${name}BumpNoise`, 256, scene);
+        bumpNoiseTexture.octaves = 7;
+        bumpNoiseTexture.persistence = 0.7;
+        bumpNoiseTexture.brightness = 0.5;
+        bumpNoiseTexture.animationSpeedFactor = 0; 
+        material.bumpTexture = bumpNoiseTexture;
+        if (material.bumpTexture) material.bumpTexture.level = 0.15; 
+
+    } else if (moonMaterialColor) { 
+        material.diffuseColor = moonMaterialColor;
+        const noiseTexture = new NoiseProceduralTexture(`${name}Noise`, 256, scene);
+        noiseTexture.brightness = 0.6;
+        noiseTexture.octaves = 6;
+        noiseTexture.persistence = 0.8;
+        noiseTexture.animationSpeedFactor = 0;
+        material.diffuseTexture = noiseTexture;
+        
+        const bumpNoiseTexture = new NoiseProceduralTexture(`${name}BumpNoise`, 256, scene);
+        bumpNoiseTexture.octaves = 7;
+        bumpNoiseTexture.persistence = 0.7;
+        bumpNoiseTexture.animationSpeedFactor = 0;
+        material.bumpTexture = bumpNoiseTexture;
+        if (material.bumpTexture) material.bumpTexture.level = 0.15;
+    }
+    else { 
+        material.diffuseColor = new Color3(0.5, 0.5, 0.5); 
+    }
     material.specularColor = new Color3(0.05, 0.05, 0.05);
     material.specularPower = 8;
     sphere.material = material;
@@ -502,11 +622,11 @@ function createCelestialBody(
         orbitLines.push(orbitLine);
     }
 
-    return { sphere, orbitAnchor, info, orbitLine, originalOrbitRadius: orbitRadius, mass, velocity: (sphere as any).velocity };
+    return { sphere, info, orbitLine, originalOrbitRadius: orbitRadius, mass, velocity: (sphere as any).velocity, axialRotationSpeed };
 }
 
-// --- Asteroid Belt Creation ---
-let asteroidBeltNode: TransformNode | null = null;
+// --- Asteroid Belt Creation (Kinematic) ---
+let asteroidBeltNode: TransformNode | null = null; 
 
 function createAsteroidBelt(scene: Scene): TransformNode {
     const asteroidMaterial = new StandardMaterial("asteroidMat", scene);
@@ -524,20 +644,18 @@ function createAsteroidBelt(scene: Scene): TransformNode {
 
     baseAsteroidShapes.forEach(shape => {
         shape.material = asteroidMaterial;
-        shape.isVisible = false;
+        shape.isVisible = false; 
     });
 
     const beltAnchor = new TransformNode("asteroidBeltAnchorNode", scene);
-    const currentMarsKinematicOrbitSpeed = visualSpeedBaseMultiplier / marsOrbitalPeriodFactor;
-    const currentJupiterKinematicOrbitSpeed = visualSpeedBaseMultiplier / jupiterOrbitalPeriodFactor;
-    const asteroidBeltOrbitSpeed = (currentMarsKinematicOrbitSpeed + currentJupiterKinematicOrbitSpeed) / 2 * 0.6;
+    const asteroidBeltOrbitSpeed = (marsKinematicOrbitSpeed + jupiterKinematicOrbitSpeed) / 2 * 0.6;
     (beltAnchor as any).orbitSpeed = asteroidBeltOrbitSpeed;
 
 
     for (let i = 0; i < numberOfAsteroids; i++) {
         const baseShape = baseAsteroidShapes[Math.floor(Math.random() * baseAsteroidShapes.length)];
         const instance = baseShape.createInstance(`asteroid${i}`);
-        instance.parent = beltAnchor;
+        instance.parent = beltAnchor; 
 
         const angle = Math.random() * Math.PI * 2;
         let radius = asteroidBeltInnerRadius + Math.random() * (asteroidBeltOuterRadius - asteroidBeltInnerRadius);
@@ -546,7 +664,7 @@ function createAsteroidBelt(scene: Scene): TransformNode {
         const x = Math.cos(angle) * radius;
         const z = Math.sin(angle) * radius;
         const y = (Math.random() - 0.5) * asteroidBeltHeight;
-        instance.position = new Vector3(x, y, z);
+        instance.position = new Vector3(x, y, z); 
 
         instance.rotationQuaternion = Quaternion.RotationYawPitchRoll(
             Math.random() * Math.PI * 2,
@@ -557,8 +675,56 @@ function createAsteroidBelt(scene: Scene): TransformNode {
         const scaleVariation = 0.4 + Math.random() * 1.2;
         instance.scaling = new Vector3(scaleVariation, scaleVariation * (0.7 + Math.random() * 0.6), scaleVariation * (0.7 + Math.random() * 0.6));
     }
-    console.log(`${numberOfAsteroids} asteroids created.`);
+    console.log(`${numberOfAsteroids} asteroids created (kinematic).`);
     return beltAnchor;
+}
+
+// --- Saturn Ring Particle Creation ---
+let saturnRingParticlesAnchor: TransformNode | null = null;
+
+function createSaturnRingParticles(saturnSphere: Mesh, scene: Scene): TransformNode {
+    const ringParticleMaterial = new StandardMaterial("ringParticleMat", scene);
+    ringParticleMaterial.diffuseColor = new Color3(0.75, 0.7, 0.65); 
+    ringParticleMaterial.emissiveColor = new Color3(0.15, 0.15, 0.15); 
+    ringParticleMaterial.specularColor = new Color3(0.2, 0.2, 0.2);
+    ringParticleMaterial.alpha = 0.6; 
+
+    const baseParticleShapes: Mesh[] = [];
+    baseParticleShapes.push(MeshBuilder.CreateIcoSphere("baseRingParticle1", { radius: 0.015, subdivisions: 0 }, scene));
+    baseParticleShapes.push(MeshBuilder.CreateSphere("baseRingParticle2", { diameter: 0.025, segments: 4 }, scene)); 
+
+    baseParticleShapes.forEach(shape => {
+        shape.material = ringParticleMaterial;
+        shape.isVisible = false; 
+    });
+
+    const ringAnchor = new TransformNode("saturnRingParticlesAnchor", scene);
+    ringAnchor.parent = saturnSphere; 
+    (ringAnchor as any).rotationSpeed = saturnRotationSpeed * 0.3; 
+
+    for (let i = 0; i < numberOfSaturnRingParticles; i++) {
+        const baseShape = baseParticleShapes[Math.floor(Math.random() * baseParticleShapes.length)];
+        const instance = baseShape.createInstance(`ringParticle${i}`);
+        instance.parent = ringAnchor;
+
+        const angle = Math.random() * Math.PI * 2;
+        const radius = saturnRingInnerRadius + Math.random() * (saturnRingOuterRadius - saturnRingInnerRadius);
+        
+        const x = Math.cos(angle) * radius;
+        const z = Math.sin(angle) * radius;
+        const y = (Math.random() - 0.5) * saturnRingThickness * (0.5 + Math.random()); 
+        instance.position = new Vector3(x, y, z);
+
+        instance.rotationQuaternion = Quaternion.RotationYawPitchRoll(
+            Math.random() * Math.PI * 2,
+            (Math.random() - 0.5) * Math.PI * 0.1, 
+            (Math.random() - 0.5) * Math.PI * 0.1  
+        );
+        const scale = 0.3 + Math.random() * 0.7;
+        instance.scaling = new Vector3(scale, scale * (0.3 + Math.random() * 0.4), scale); 
+    }
+    console.log(`${numberOfSaturnRingParticles} Saturn ring particles created.`);
+    return ringAnchor;
 }
 
 
@@ -575,12 +741,24 @@ const planetInfoDatabase: { [key: string]: PlanetInfoData } = { // Populated as 
     uranus: { name: "Uranus", type: "Ice Giant", tempC: "-214 °C (Cloud Tops)", sizeKm: "50,724 km", moonsCount: "27 (Known)", description: "An ice giant that rotates on its side, giving it extreme seasons.", mass: "14.5 Earths", gravity: "8.69 m/s²", orbitalPeriod: "84.01 Earth years", rotationPeriod: "-17.2 hours (Retrograde)", axialTilt: "97.77°", atmosphere: "Hydrogen, Helium, Methane (gives blue-green color)", weather: "Relatively featureless atmosphere, some cloud bands", seasons: "Extreme; each pole gets 42 years of continuous sunlight, then 42 years of darkness.", notableMoons: "Titania, Oberon, Umbriel, Ariel, Miranda", rings: "Faint, dark rings", funFact1: "First planet discovered using a telescope (by William Herschel in 1781).", funFact2: "Its magnetic field is tilted at nearly 60 degrees from its axis of rotation." },
     neptune: { name: "Neptune", type: "Ice Giant", tempC: "-218 °C (Cloud Tops)", sizeKm: "49,244 km", moonsCount: "14 (Known)", description: "The most distant major planet, known for its deep blue color and the fastest winds in the Solar System.", mass: "17 Earths", gravity: "11.15 m/s²", orbitalPeriod: "164.8 Earth years", rotationPeriod: "16.1 hours", axialTilt: "28.32°", atmosphere: "Hydrogen, Helium, Methane", weather: "Extremely strong winds (over 2,000 km/h), Great Dark Spot (transient storm)", seasons: "Yes, due to axial tilt", notableMoons: "Triton (orbits retrograde), Nereid", rings: "Faint, clumpy rings (arcs)", funFact1: "Its existence was predicted mathematically before it was directly observed.", funFact2: "Triton is one of the coldest known objects in the Solar System, with geysers of nitrogen ice." },
     pluto: { name: "Pluto", type: "Dwarf Planet", tempC: "-229 °C (Avg)", sizeKm: "2,376 km", moonsCount: "5", description: "A dwarf planet in the Kuiper Belt, known for its heart-shaped glacier (Sputnik Planitia).", mass: "0.00218 Earths", gravity: "0.62 m/s²", orbitalPeriod: "248 Earth years", rotationPeriod: "-6.39 Earth days (Retrograde)", axialTilt: "119.59°", atmosphere: "Thin Nitrogen, Methane, Carbon Monoxide (seasonal)", weather: "Extreme cold, thin atmosphere varies with distance from Sun", seasons: "Extreme, due to tilt and highly eccentric orbit", notableMoons: "Charon (largest), Styx, Nix, Kerberos, Hydra", rings: "None known", funFact1: "Charon is so large relative to Pluto (about half its diameter) that they are sometimes considered a binary system.", funFact2: "Its orbit is so eccentric that it sometimes comes closer to the Sun than Neptune." },
-    moon: { name: "Moon", type: "Natural Satellite", tempC: "-20 °C (Avg)", sizeKm: "3,474 km", moonsCount: "N/A", description: "Earth's only natural satellite, playing a crucial role in tides and stabilizing Earth's axial tilt.", mass: "0.0123 Earths", gravity: "1.62 m/s²", orbitalPeriod: "27.3 Earth days (around Earth)", rotationPeriod: "27.3 Earth days (Tidally locked)", axialTilt: "1.54° (to its orbit around Earth)", atmosphere: "Very thin exosphere (Helium, Neon, Argon)", weather: "No weather, extreme temperature variations between day and night", seasons: "None", notableMoons: "N/A", rings: "None", funFact1: "The fifth largest moon in the Solar System.", funFact2: "Humans first landed on the Moon in 1969 (Apollo 11 mission)."}
+    moon: { name: "Moon", type: "Natural Satellite", tempC: "-20 °C (Avg)", sizeKm: "3,474 km", moonsCount: "N/A", description: "Earth's only natural satellite, playing a crucial role in tides and stabilizing Earth's axial tilt.", mass: "0.0123 Earths", gravity: "1.62 m/s²", orbitalPeriod: "27.3 Earth days (around Earth)", rotationPeriod: "27.3 Earth days (Tidally locked)", axialTilt: "1.54° (to its orbit around Earth)", atmosphere: "Very thin exosphere (Helium, Neon, Argon)", weather: "No weather, extreme temperature variations between day and night", seasons: "None", notableMoons: "N/A", rings: "None", funFact1: "The fifth largest moon in the Solar System.", funFact2: "Humans first landed on the Moon in 1969 (Apollo 11 mission)."},
+    // New Moons Data
+    io: { name: "Io", type: "Volcanic Moon (Jupiter)", tempC: "-143 °C (Avg)", sizeKm: "3,642 km", moonsCount: "N/A", description: "The most volcanically active world in the Solar System, with hundreds of volcanoes.", mass: "0.015 Earths", gravity: "1.796 m/s²", orbitalPeriod: "1.77 Earth days (around Jupiter)", rotationPeriod: "1.77 Earth days (Tidally locked)", axialTilt: "0°", atmosphere: "Thin Sulfur Dioxide", weather: "Constant volcanic plumes", seasons: "None", notableMoons: "N/A", rings: "Contributes to Jupiter's faint rings", funFact1: "Its surface is constantly being repaved by volcanic activity.", funFact2: "Tidal forces from Jupiter cause its intense volcanism." },
+    europa: { name: "Europa", type: "Icy Moon (Jupiter)", tempC: "-160 °C (Surface)", sizeKm: "3,121 km", moonsCount: "N/A", description: "A smooth, icy moon with a strong possibility of a subsurface saltwater ocean.", mass: "0.008 Earths", gravity: "1.314 m/s²", orbitalPeriod: "3.55 Earth days (around Jupiter)", rotationPeriod: "3.55 Earth days (Tidally locked)", axialTilt: "0.1°", atmosphere: "Very thin Oxygen exosphere", weather: "None", seasons: "None", notableMoons: "N/A", rings: "None", funFact1: "One of the smoothest surfaces of any known solid object in the Solar System.", funFact2: "A prime candidate for extraterrestrial life due to its potential ocean." },
+    ganymede: { name: "Ganymede", type: "Largest Moon (Jupiter)", tempC: "-163 °C (Surface)", sizeKm: "5,268 km", moonsCount: "N/A", description: "The largest moon in the Solar System, bigger than Mercury, with its own magnetic field.", mass: "0.025 Earths", gravity: "1.428 m/s²", orbitalPeriod: "7.15 Earth days (around Jupiter)", rotationPeriod: "7.15 Earth days (Tidally locked)", axialTilt: "0.33°", atmosphere: "Very thin Oxygen exosphere", weather: "None", seasons: "None", notableMoons: "N/A", rings: "None", funFact1: "Larger than the planet Mercury.", funFact2: "The only moon known to have its own magnetosphere." },
+    callisto: { name: "Callisto", type: "Cratered Moon (Jupiter)", tempC: "-143 °C (Surface)", sizeKm: "4,821 km", moonsCount: "N/A", description: "A heavily cratered moon, suggesting a geologically inactive surface, may have a subsurface ocean.", mass: "0.018 Earths", gravity: "1.235 m/s²", orbitalPeriod: "16.69 Earth days (around Jupiter)", rotationPeriod: "16.69 Earth days (Tidally locked)", axialTilt: "0°", atmosphere: "Very thin Carbon Dioxide exosphere", weather: "None", seasons: "None", notableMoons: "N/A", rings: "None", funFact1: "One of the most heavily cratered surfaces in the Solar System.", funFact2: "Its ancient surface may hold clues to the early Solar System." },
+    titan: { name: "Titan", type: "Large Moon (Saturn)", tempC: "-179 °C (Surface)", sizeKm: "5,150 km", moonsCount: "N/A", description: "Saturn's largest moon, with a thick nitrogen-rich atmosphere and liquid methane/ethane lakes.", mass: "0.0225 Earths", gravity: "1.352 m/s²", orbitalPeriod: "15.95 Earth days (around Saturn)", rotationPeriod: "15.95 Earth days (Tidally locked)", axialTilt: "0.3°", atmosphere: "Dense Nitrogen, Methane", weather: "Methane rain, winds", seasons: "Yes, similar to Saturn's", notableMoons: "N/A", rings: "None", funFact1: "The only moon known to have a dense atmosphere.", funFact2: "The Huygens probe successfully landed on Titan in 2005." },
+    rhea: { name: "Rhea", type: "Icy Moon (Saturn)", tempC: "-174 °C (Avg)", sizeKm: "1,528 km", moonsCount: "N/A", description: "Saturn's second-largest moon, heavily cratered and composed mostly of water ice.", mass: "0.00039 Earths", gravity: "0.264 m/s²", orbitalPeriod: "4.52 Earth days (around Saturn)", rotationPeriod: "4.52 Earth days (Tidally locked)", axialTilt: "0.0°", atmosphere: "Very thin exosphere (Oxygen, CO2)", weather: "None", seasons: "None", notableMoons: "N/A", rings: "Possibly a tenuous ring system of its own.", funFact1: "Its density suggests it's about 2/3 ice and 1/3 rock.", funFact2: "First moon of Saturn discovered after Titan." },
+    enceladus: { name: "Enceladus", type: "Geologically Active Moon (Saturn)", tempC: "-201 °C (Avg)", sizeKm: "504 km", moonsCount: "N/A", description: "A small icy moon known for its cryovolcanic plumes erupting from its south polar region, suggesting a subsurface ocean.", mass: "0.000018 Earths", gravity: "0.113 m/s²", orbitalPeriod: "1.37 Earth days (around Saturn)", rotationPeriod: "1.37 Earth days (Tidally locked)", axialTilt: "0°", atmosphere: "Water vapor, Nitrogen, CO2, Methane (from plumes)", weather: "Cryovolcanic eruptions", seasons: "None", notableMoons: "N/A", rings: "Contributes material to Saturn's E ring.", funFact1: "One of the most reflective bodies in the Solar System.", funFact2: "Strong evidence for a liquid water ocean under its icy crust." },
+    mimas: { name: "Mimas", type: "Cratered Moon (Saturn)", tempC: "-209 °C (Avg)", sizeKm: "396 km", moonsCount: "N/A", description: "Known for its enormous impact crater, Herschel, which gives it a resemblance to the Death Star.", mass: "0.0000063 Earths", gravity: "0.064 m/s²", orbitalPeriod: "0.94 Earth days (around Saturn)", rotationPeriod: "0.94 Earth days (Tidally locked)", axialTilt: "1.51°", atmosphere: "None", weather: "None", seasons: "None", notableMoons: "N/A", rings: "None", funFact1: "The Herschel crater is about one-third the diameter of Mimas itself.", funFact2: "Composed mostly of water ice with a small amount of rock." },
+    phobos: { name: "Phobos", type: "Small Moon (Mars)", tempC: "-40 °C (Avg)", sizeKm: "22.2 km (mean diameter)", moonsCount: "N/A", description: "The larger and innermost of Mars's two small, irregularly shaped moons. Likely a captured asteroid.", mass: "1.06 × 10^16 kg", gravity: "~0.0057 m/s²", orbitalPeriod: "0.319 Earth days (around Mars)", rotationPeriod: "0.319 Earth days (Tidally locked)", axialTilt: "1.09°", atmosphere: "None", weather: "None", seasons: "None", notableMoons: "N/A", rings: "Expected to form a ring around Mars in ~50 million years.", funFact1: "Orbits Mars faster than Mars rotates.", funFact2: "Its surface is heavily cratered." },
+    deimos: { name: "Deimos", type: "Small Moon (Mars)", tempC: "-40 °C (Avg)", sizeKm: "12.4 km (mean diameter)", moonsCount: "N/A", description: "The smaller and outermost of Mars's two moons. Also likely a captured asteroid.", mass: "1.47 × 10^15 kg", gravity: "~0.003 m/s²", orbitalPeriod: "1.26 Earth days (around Mars)", rotationPeriod: "1.26 Earth days (Tidally locked)", axialTilt: "0.93°", atmosphere: "None", weather: "None", seasons: "None", notableMoons: "N/A", rings: "None", funFact1: "Has a much smoother surface than Phobos due to a layer of regolith.", funFact2: "One of the smallest known moons in the Solar System." },
 };
 
 (planetInfoDatabase.sun as any).planetInfo = planetInfoDatabase.sun;
 (sunSphere as any).mass = sunMass;
 (sunSphere as any).velocity = Vector3.Zero();
+(sunSphere as any).axialRotationSpeed = sunRotationSpeed; 
 
 const planetDataArray = [
     planetInfoDatabase.mercury, planetInfoDatabase.venus, planetInfoDatabase.earth, planetInfoDatabase.mars,
@@ -590,24 +768,22 @@ const planetDataArray = [
 
 planetDataArray.forEach(pInfo => {
     let currentSize = 1, currentOrbit = 10, currentTilt = 0;
-    let currentMass = 1;
-    let currentTexture = `/${pInfo.name.toLowerCase()}.jpg`;
+    let currentMass = 1, currentAxialRotSpeed = 0;
+    let currentTexture: string | null = `/${pInfo.name.toLowerCase()}.jpg`;
 
     switch(pInfo.name.toLowerCase()) {
-        case "mercury": currentSize = mercurySize; currentOrbit = mercuryOrbitRadius; currentTilt = mercuryAxialTiltDegrees; currentMass = mercuryMass; currentTexture = "/mercury.jpg"; break;
-        case "venus": currentSize = venusSize; currentOrbit = venusOrbitRadius; currentTilt = venusAxialTiltDegrees; currentMass = venusMass; currentTexture = "/venus_surface.jpg"; break;
-        case "earth": currentSize = earthSize; currentOrbit = earthOrbitRadius; currentTilt = earthAxialTiltDegrees; currentMass = earthMass; currentTexture = "/earth.jpg"; break;
-        case "mars": currentSize = marsSize; currentOrbit = marsOrbitRadius; currentTilt = marsAxialTiltDegrees; currentMass = marsMass; currentTexture = "/mars.jpg"; break;
-        case "jupiter": currentSize = jupiterSize; currentOrbit = jupiterOrbitRadius; currentTilt = jupiterAxialTiltDegrees; currentMass = jupiterMass; currentTexture = "/jupiter.jpg"; break;
-        case "saturn": currentSize = saturnSize; currentOrbit = saturnOrbitRadius; currentTilt = saturnAxialTiltDegrees; currentMass = saturnMass; currentTexture = "/saturn.jpg"; break;
-        case "uranus": currentSize = uranusSize; currentOrbit = uranusOrbitRadius; currentTilt = uranusAxialTiltDegrees; currentMass = uranusMass; currentTexture = "/uranus.jpg"; break;
-        case "neptune": currentSize = neptuneSize; currentOrbit = neptuneOrbitRadius; currentTilt = neptuneAxialTiltDegrees; currentMass = neptuneMass; currentTexture = "/neptune.jpg"; break;
-        case "pluto": currentSize = plutoSize; currentOrbit = plutoOrbitRadius; currentTilt = plutoAxialTiltDegrees; currentMass = plutoMass; currentTexture = "/pluto.jpg"; break;
+        case "mercury": currentSize = mercurySize; currentOrbit = mercuryOrbitRadius; currentTilt = mercuryAxialTiltDegrees; currentMass = mercuryMass; currentAxialRotSpeed = mercuryRotationSpeed; break;
+        case "venus": currentSize = venusSize; currentOrbit = venusOrbitRadius; currentTilt = venusAxialTiltDegrees; currentMass = venusMass; currentAxialRotSpeed = venusRotationSpeed; currentTexture = "/venus_surface.jpg"; break;
+        case "earth": currentSize = earthSize; currentOrbit = earthOrbitRadius; currentTilt = earthAxialTiltDegrees; currentMass = earthMass; currentAxialRotSpeed = earthRotationSpeed; break;
+        case "mars": currentSize = marsSize; currentOrbit = marsOrbitRadius; currentTilt = marsAxialTiltDegrees; currentMass = marsMass; currentAxialRotSpeed = marsRotationSpeed; break;
+        case "jupiter": currentSize = jupiterSize; currentOrbit = jupiterOrbitRadius; currentTilt = jupiterAxialTiltDegrees; currentMass = jupiterMass; currentAxialRotSpeed = jupiterRotationSpeed; break;
+        case "saturn": currentSize = saturnSize; currentOrbit = saturnOrbitRadius; currentTilt = saturnAxialTiltDegrees; currentMass = saturnMass; currentAxialRotSpeed = saturnRotationSpeed; break;
+        case "uranus": currentSize = uranusSize; currentOrbit = uranusOrbitRadius; currentTilt = uranusAxialTiltDegrees; currentMass = uranusMass; currentAxialRotSpeed = uranusRotationSpeed; break;
+        case "neptune": currentSize = neptuneSize; currentOrbit = neptuneOrbitRadius; currentTilt = neptuneAxialTiltDegrees; currentMass = neptuneMass; currentAxialRotSpeed = neptuneRotationSpeed; break;
+        case "pluto": currentSize = plutoSize; currentOrbit = plutoOrbitRadius; currentTilt = plutoAxialTiltDegrees; currentMass = plutoMass; currentAxialRotSpeed = plutoRotationSpeed; break;
     }
 
-    planets[pInfo.name.toLowerCase()] = createCelestialBody(pInfo.name.toLowerCase(), currentSize, currentOrbit, currentTexture, scene, currentTilt, pInfo, currentMass);
-    (planets[pInfo.name.toLowerCase()].sphere as any).rotationSpeed = (visualSpeedBaseMultiplier / (planetInfoDatabase as any)[pInfo.name.toLowerCase()].rotationPeriodFactor) || 0;
-
+    planets[pInfo.name.toLowerCase()] = createCelestialBody(pInfo.name.toLowerCase(), currentSize, currentOrbit, currentTexture, scene, currentTilt, pInfo, currentMass, currentAxialRotSpeed);
 });
 
 
@@ -640,36 +816,11 @@ if (venusSystem && venusSystem.sphere) {
     (venusAtmosphereSphere as any).isAtmosphere = true;
 }
 
-// Special setup for Saturn's Rings
+// Special setup for Saturn's Rings - Now using particles
 const saturnSystem = planets["saturn"];
 if (saturnSystem && saturnSystem.sphere) {
-    const ringMesh = MeshBuilder.CreateDisc("saturnRing", {radius: saturnRingOuterRadius, tessellation: 128, sideOrientation: Mesh.DOUBLESIDE }, scene);
-    ringMesh.parent = saturnSystem.sphere;
-    ringMesh.rotation.x = Math.PI / 2;
-    const ringMaterial = new StandardMaterial("saturnRingMat", scene);
-    const ringTexture = new Texture("/saturn_ring_alpha.png", scene, undefined, false, Texture.BILINEAR_SAMPLINGMODE,
-        () => {
-            console.log("Saturn ring texture loaded.");
-            if (ringTexture) {
-                ringTexture.uScale = 1;
-                ringTexture.vScale = 1;
-                ringTexture.wAng = -Math.PI / 2;
-            }
-        },
-        (m,e) => console.error("Saturn ring texture error:", m, e)
-    );
-    ringMaterial.diffuseTexture = ringTexture;
-    ringMaterial.opacityTexture = ringTexture;
-    ringMaterial.useAlphaFromDiffuseTexture = true;
-    ringMaterial.alphaMode = Engine.ALPHA_COMBINE;
-    ringMaterial.diffuseColor = new Color3(1, 1, 1);
-    ringMaterial.emissiveColor = new Color3(0.6, 0.6, 0.6);
-    ringMaterial.specularColor = new Color3(0.35, 0.35, 0.35);
-    ringMaterial.specularPower = 24;
-    ringMaterial.backFaceCulling = false;
-    ringMesh.material = ringMaterial;
-    saturnSystem.ringMesh = ringMesh;
-    (ringMesh as any).isRing = true;
+    saturnRingParticlesAnchor = createSaturnRingParticles(saturnSystem.sphere, scene);
+    saturnSystem.ringParticlesAnchor = saturnRingParticlesAnchor; 
 }
 
 // Earth Cloud Layer
@@ -694,23 +845,40 @@ if (earthSystemForClouds && earthSystemForClouds.sphere) {
     (cloudSphere as any).isAtmosphere = true;
 }
 
-// Moon - Now physics-based
-const earthForMoonSystem = planets["earth"];
-if (earthForMoonSystem && earthForMoonSystem.sphere) {
-    const moonSystem = createCelestialBody("moon", moonSize, moonOrbitRadius, "/moon.jpg", scene, 0, planetInfoDatabase.moon, moonMass, true /* isMoon = true */);
+// Moon - Physics based
+const earthForPhysicsMoon = planets["earth"];
+if (earthForPhysicsMoon && earthForPhysicsMoon.sphere) {
+    const moonSystem = createCelestialBody("moon", moonSize, moonOrbitRadius, "/moon.jpg", scene, 0, planetInfoDatabase.moon, moonMass, moonAxialRotationSpeed, true, earthForPhysicsMoon.sphere);
     planets["moon"] = moonSystem;
-    // Initial position relative to Earth for Moon
-    moonSystem.sphere.position = earthForMoonSystem.sphere.position.add(new Vector3(moonOrbitRadius, 0, 0));
-    // Initial velocity for Moon to orbit Earth (added to Earth's velocity)
-    const earthVelocity = (earthForMoonSystem.sphere as any).velocity as Vector3;
-    const moonOrbitalSpeedAroundEarth = Math.sqrt((G * earthMass) / moonOrbitRadius);
-    moonSystem.velocity.copyFrom(earthVelocity).addInPlace(new Vector3(0,0,-moonOrbitalSpeedAroundEarth));
-    (moonSystem.sphere as any).rotationSpeed = moonKinematicRotationSpeed; // Still use kinematic for axial spin for simplicity
+}
+
+// --- Create Moons for other planets ---
+const marsForMoons = planets["mars"]?.sphere;
+if (marsForMoons) {
+    planets["phobos"] = createCelestialBody("phobos", phobosSize, phobosOrbitRadius, null, scene, phobosAxialTiltDegrees, planetInfoDatabase.phobos, phobosMass, phobosAxialRotationSpeed, true, marsForMoons, new Color3(0.45, 0.4, 0.35)); // Darkish gray
+    planets["deimos"] = createCelestialBody("deimos", deimosSize, deimosOrbitRadius, null, scene, deimosAxialTiltDegrees, planetInfoDatabase.deimos, deimosMass, deimosAxialRotationSpeed, true, marsForMoons, new Color3(0.55, 0.5, 0.45)); // Lighter gray
+}
+
+const jupiterForMoons = planets["jupiter"]?.sphere;
+if (jupiterForMoons) {
+    planets["io"] = createCelestialBody("io", ioSize, ioOrbitRadius, null, scene, ioAxialTiltDegrees, planetInfoDatabase.io, ioMass, ioAxialRotationSpeed, true, jupiterForMoons, new Color3(0.9, 0.8, 0.3)); 
+    planets["europa"] = createCelestialBody("europa", europaSize, europaOrbitRadius, null, scene, europaAxialTiltDegrees, planetInfoDatabase.europa, europaMass, europaAxialRotationSpeed, true, jupiterForMoons, new Color3(0.85, 0.85, 0.9)); 
+    planets["ganymede"] = createCelestialBody("ganymede", ganymedeSize, ganymedeOrbitRadius, null, scene, ganymedeAxialTiltDegrees, planetInfoDatabase.ganymede, ganymedeMass, ganymedeAxialRotationSpeed, true, jupiterForMoons, new Color3(0.7, 0.65, 0.6)); 
+    planets["callisto"] = createCelestialBody("callisto", callistoSize, callistoOrbitRadius, null, scene, callistoAxialTiltDegrees, planetInfoDatabase.callisto, callistoMass, callistoAxialRotationSpeed, true, jupiterForMoons, new Color3(0.4, 0.35, 0.3)); 
+}
+// Saturn's Moons
+const saturnForMoons = planets["saturn"]?.sphere;
+if (saturnForMoons) {
+    planets["titan"] = createCelestialBody("titan", titanSize, titanOrbitRadius, null, scene, titanAxialTiltDegrees, planetInfoDatabase.titan, titanMass, titanAxialRotationSpeed, true, saturnForMoons, new Color3(0.9, 0.7, 0.4)); 
+    planets["rhea"] = createCelestialBody("rhea", rheaSize, rheaOrbitRadius, null, scene, rheaAxialTiltDegrees, planetInfoDatabase.rhea, rheaMass, rheaAxialRotationSpeed, true, saturnForMoons, new Color3(0.7, 0.7, 0.7)); 
+    planets["enceladus"] = createCelestialBody("enceladus", enceladusSize, enceladusOrbitRadius, null, scene, enceladusAxialTiltDegrees, planetInfoDatabase.enceladus, enceladusMass, enceladusAxialRotationSpeed, true, saturnForMoons, new Color3(0.9, 0.9, 0.95)); 
+    planets["mimas"] = createCelestialBody("mimas", mimasSize, mimasOrbitRadius, null, scene, mimasAxialTiltDegrees, planetInfoDatabase.mimas, mimasMass, mimasAxialRotationSpeed, true, saturnForMoons, new Color3(0.6, 0.6, 0.65)); 
 }
 
 
 // --- Create Asteroid Belt ---
-asteroidBeltNode = createAsteroidBelt(scene); 
+const asteroidBeltAnchor = createAsteroidBelt(scene); 
+asteroidBeltNode = asteroidBeltAnchor;
 
 // Shadow Generator
 const shadowGenerator = new ShadowGenerator(2048, sunLight);
@@ -727,6 +895,13 @@ if (shadowMap) {
 
 if (planets["moon"] && planets["moon"].sphere) shadowGenerator.addShadowCaster(planets["moon"].sphere);
 if (planets["earth"] && planets["earth"].sphere) shadowGenerator.addShadowCaster(planets["earth"].sphere);
+// Add new moons as shadow casters if desired
+Object.values(planets).forEach(pSystem => {
+    if (pSystem && pSystem.sphere && pSystem.info.name !== "Earth" && pSystem.info.name !== "Moon") { // Avoid re-adding Earth/Moon
+        shadowGenerator.addShadowCaster(pSystem.sphere);
+    }
+});
+
 
 // --- Interaction Logic ---
 let lastHoveredMesh: Mesh | null = null;
@@ -795,7 +970,7 @@ if(closeDetailedPanelButton) {
 
 scene.onPointerObservable.add((pointerInfo: PointerInfo) => {
     const pickResult = scene.pick(pointerInfo.event.clientX, pointerInfo.event.clientY, (mesh) => {
-        return !!(mesh as any).planetInfo && !(mesh as any).isAtmosphere && !(mesh as any).isRing;
+        return !!(mesh as any).planetInfo && !(mesh as any).isAtmosphere && !(mesh as any).isRing && !(mesh.name.startsWith("asteroid")) && !(mesh.name.startsWith("ringParticle"));
     });
 
     if (pointerInfo.type === PointerEventTypes.POINTERMOVE) {
@@ -885,59 +1060,55 @@ scene.onBeforeRenderObservable.add(() => {
     physicsAccumulator += scaledDeltaTimeForPhysics;
 
     while (physicsAccumulator >= physicsTimeStep) {
-        // Calculate forces and update velocities for all planets (excluding Sun) and Moon
-        const allPhysicsBodies = [...planetDataArray.filter(p => p.name.toLowerCase() !== "sun"), planetInfoDatabase.moon];
+        // Create a list of all bodies that exert and experience gravity
+        const allPhysicsBodies: Mesh[] = [];
+        if (sunSphere) allPhysicsBodies.push(sunSphere); 
+        planetDataArray.forEach(pInfo => { 
+            const system = planets[pInfo.name.toLowerCase()];
+            if (system && system.sphere && pInfo.name.toLowerCase() !== "sun") { 
+                allPhysicsBodies.push(system.sphere);
+            }
+        });
+        // Add all created moons to the physics simulation
+        ["moon", "io", "europa", "ganymede", "callisto", "titan", "rhea", "enceladus", "mimas", "phobos", "deimos"].forEach(moonName => {
+            if (planets[moonName] && planets[moonName].sphere) {
+                allPhysicsBodies.push(planets[moonName].sphere);
+            }
+        });
         
-        allPhysicsBodies.forEach(pInfo => {
-            const bodySystem = planets[pInfo.name.toLowerCase()];
-            if (!bodySystem || !bodySystem.sphere || !(bodySystem.sphere as any).mass || !(bodySystem.sphere as any).velocity) return;
+        // Calculate net forces on each body
+        allPhysicsBodies.forEach(bodySphereA => {
+            if (!(bodySphereA as any).mass || !(bodySphereA as any).velocity) return;
 
-            const bodySphere = bodySystem.sphere;
-            const bodyMass = (bodySphere as any).mass;
-            const bodyVelocity = (bodySphere as any).velocity as Vector3;
-            let netForce = Vector3.Zero();
+            const bodyAVelocity = (bodySphereA as any).velocity as Vector3;
+            let netForceOnA = Vector3.Zero();
 
-            // Force from Sun
-            const toSun = sunSphere.position.subtract(bodySphere.position);
-            const distSqSun = toSun.lengthSquared();
-            if (distSqSun > 0) {
-                const forceMagSun = (G * sunMass * bodyMass) / distSqSun;
-                netForce.addInPlace(toSun.normalize().scale(forceMagSun));
-            }
+            allPhysicsBodies.forEach(bodySphereB => {
+                if (bodySphereA === bodySphereB || !(bodySphereB as any).mass) return; 
 
-            // If this body is the Moon, add force from Earth
-            if (pInfo.name.toLowerCase() === "moon" && planets["earth"]?.sphere) {
-                const earthSphere = planets["earth"].sphere;
-                const toEarth = earthSphere.position.subtract(bodySphere.position);
-                const distSqEarth = toEarth.lengthSquared();
-                if (distSqEarth > 0) {
-                    const forceMagEarth = (G * earthMass * bodyMass) / distSqEarth; // Earth's mass pulls Moon
-                    netForce.addInPlace(toEarth.normalize().scale(forceMagEarth));
+                const bodyBMass = (bodySphereB as any).mass;
+                const toBodyB = bodySphereB.position.subtract(bodySphereA.position);
+                const distSq = toBodyB.lengthSquared();
+
+                if (distSq > 0.0001) { 
+                    const forceMag = (G * (bodySphereA as any).mass * bodyBMass) / distSq;
+                    netForceOnA.addInPlace(toBodyB.normalize().scale(forceMag));
                 }
-            }
-            // If this body is Earth, add force from Moon
-            else if (pInfo.name.toLowerCase() === "earth" && planets["moon"]?.sphere) {
-                const moonSphere = planets["moon"].sphere;
-                const toMoon = moonSphere.position.subtract(bodySphere.position);
-                const distSqMoon = toMoon.lengthSquared();
-                if (distSqMoon > 0) {
-                    const forceMagMoon = (G * moonMass * bodyMass) / distSqMoon;
-                    netForce.addInPlace(toMoon.normalize().scale(forceMagMoon));
-                }
-            }
+            });
             
-            const acceleration = netForce.scale(1 / bodyMass);
-            bodyVelocity.addInPlace(acceleration.scale(physicsTimeStep)); 
+            if (bodySphereA.name !== "sunSphere") { 
+                const acceleration = netForceOnA.scale(1 / (bodySphereA as any).mass);
+                bodyAVelocity.addInPlace(acceleration.scale(physicsTimeStep)); 
+            }
         });
 
-        // Update positions for all planets and Moon based on new velocities
-         allPhysicsBodies.forEach(pInfo => {
-            const bodySystem = planets[pInfo.name.toLowerCase()];
-            if (bodySystem && bodySystem.sphere && (bodySystem.sphere as any).velocity) {
-                const bodySphere = bodySystem.sphere;
-                const bodyVelocity = (bodySphere as any).velocity as Vector3;
-                bodySphere.position.addInPlace(bodyVelocity.scale(physicsTimeStep)); 
-            }
+        // Update positions based on new velocities
+         allPhysicsBodies.forEach(bodySphere => {
+             if (bodySphere.name === "sunSphere") return; 
+             if (!(bodySphere as any).velocity) return;
+
+            const bodyVelocity = (bodySphere as any).velocity as Vector3;
+            bodySphere.position.addInPlace(bodyVelocity.scale(physicsTimeStep)); 
         });
         
         physicsAccumulator -= physicsTimeStep;
@@ -945,21 +1116,28 @@ scene.onBeforeRenderObservable.add(() => {
 
 
     // Visual Rotations
-    const sunRotationDelta = sunRotationSpeed * scaledDeltaTimeForVisuals;
-    if(sunSphere) sunSphere.rotate(Vector3.Up(), sunRotationDelta, Space.LOCAL);
+    if(sunSphere && (sunSphere as any).axialRotationSpeed) { 
+        sunSphere.rotate(Vector3.Up(), (sunSphere as any).axialRotationSpeed * scaledDeltaTimeForVisuals, Space.LOCAL);
+    }
 
-    if (asteroidBeltNode) {
+
+    if (asteroidBeltNode) { 
         const beltSpeed = (asteroidBeltNode as any).orbitSpeed || 0; 
         asteroidBeltNode.rotation.y += beltSpeed * scaledDeltaTimeForVisuals;
     }
+    if (saturnRingParticlesAnchor) { 
+        const ringSpeed = (saturnRingParticlesAnchor as any).rotationSpeed || 0;
+        saturnRingParticlesAnchor.rotation.y += ringSpeed * scaledDeltaTimeForVisuals;
+    }
+
 
     planetDataArray.forEach(pInfo => { 
         if (pInfo.name.toLowerCase() === "sun") return; 
 
         const system = planets[pInfo.name.toLowerCase()];
         if (system && system.sphere) { 
-            const rotationSpeed = (system.sphere as any).rotationSpeed || 0;
-            const rotationAmount = rotationSpeed * scaledDeltaTimeForVisuals;
+            const axialRotSpeed = (system.sphere as any).axialRotationSpeed || 0; 
+            const rotationAmount = axialRotSpeed * scaledDeltaTimeForVisuals;
             system.sphere.rotate(Vector3.Up(), rotationAmount, Space.LOCAL);
 
             if (pInfo.name.toLowerCase() === "earth" && (system as any).cloudSphere) {
@@ -972,12 +1150,14 @@ scene.onBeforeRenderObservable.add(() => {
         }
     });
 
-    // Moon's axial rotation (visual, tidally locked to its kinematic orbit speed)
-    const moonSystem = planets["moon"];
-    if (moonSystem && moonSystem.sphere) {
-        const moonRotS = (moonSystem.sphere as any).rotationSpeed || 0; 
-        moonSystem.sphere.rotate(Vector3.Up(), moonRotS * scaledDeltaTimeForVisuals, Space.LOCAL);
-    }
+    // Axial rotation for all moons
+    ["moon", "io", "europa", "ganymede", "callisto", "titan", "rhea", "enceladus", "mimas", "phobos", "deimos"].forEach(moonName => {
+        const moonSystem = planets[moonName];
+        if (moonSystem && moonSystem.sphere) {
+            const moonRotS = (moonSystem.sphere as any).axialRotationSpeed || 0; 
+            moonSystem.sphere.rotate(Vector3.Up(), moonRotS * scaledDeltaTimeForVisuals, Space.LOCAL);
+        }
+    });
 });
 
 // Render Loop
@@ -992,4 +1172,4 @@ window.addEventListener('resize', () => {
     engine.resize();
 });
 
-console.log("Babylon.js with Vite setup complete! Full solar system with Gravity (Phase 2) and Sim Speed Control should be rendering. 😊🎉");
+console.log("Babylon.js with Vite setup complete! Full N-Body Solar System with more moons should be rendering. 😊🎉");
