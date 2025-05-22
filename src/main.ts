@@ -18,7 +18,6 @@ import { PointerEventTypes, PointerInfo } from '@babylonjs/core/Events/pointerEv
 import { Animation } from '@babylonjs/core/Animations/animation';
 import { EasingFunction, QuinticEase } from '@babylonjs/core/Animations/easing';
 import { LinesMesh } from '@babylonjs/core/Meshes/linesMesh';
-import { InstancedMesh } from '@babylonjs/core/Meshes/instancedMesh';
 
 // Import side effects from core for mesh building
 import "@babylonjs/core/Meshes/meshBuilder";
@@ -119,7 +118,7 @@ const numberOfAsteroids = 2000;
 
 const skyboxSize = Math.max(plutoOrbitRadius * 2.0, 1000);
 
-const overviewScaleFactor = 0.5;
+// const overviewScaleFactor = 0.5;
 
 const mercuryAxialTiltDegrees = 0.03;
 const venusAxialTiltDegrees = 177.4;
@@ -149,15 +148,9 @@ const plutoMass = 0.0022;
 
 // --- Rotational Period Factors (Relative to Earth's day) ---
 const sunRotationFactor = 27.0;
-const mercuryRotationFactor = 58.6;
 const venusRotationFactor = -243.0;
 const earthRotationFactor = 1.0; 
-const marsRotationFactor = 1.03;
-const jupiterRotationFactor = 0.41;
-const saturnRotationFactor = 0.44;
-const uranusRotationFactor = -0.72;
-const neptuneRotationFactor = 0.67;
-const plutoRotationFactor = -6.39;
+
 
 const cloudRotationSpeedRelativeToEarthSurface = 1.2;
 const earthOrbitalPeriodFactorForMoon = 1.0; 
@@ -166,15 +159,9 @@ const moonOrbitalPeriodFactorEarthRelative = 27.3 / 365.25;
 
 // --- Calculated Visual Speeds (Axial Rotation & Kinematic Orbits) ---
 const sunRotationSpeed = visualSpeedBaseMultiplier / sunRotationFactor;
-const mercuryRotationSpeed = visualSpeedBaseMultiplier / mercuryRotationFactor;
 const venusRotationSpeed = visualSpeedBaseMultiplier / venusRotationFactor;
 const earthRotationSpeed = visualSpeedBaseMultiplier / earthRotationFactor;
-const marsRotationSpeed = visualSpeedBaseMultiplier / marsRotationFactor;
-const jupiterRotationSpeed = visualSpeedBaseMultiplier / jupiterRotationFactor;
-const saturnRotationSpeed = visualSpeedBaseMultiplier / saturnRotationFactor;
-const uranusRotationSpeed = visualSpeedBaseMultiplier / uranusRotationFactor;
-const neptuneRotationSpeed = visualSpeedBaseMultiplier / neptuneRotationFactor;
-const plutoRotationSpeed = visualSpeedBaseMultiplier / plutoRotationFactor;
+
 
 const moonKinematicRotationSpeed = visualSpeedBaseMultiplier / earthOrbitalPeriodFactorForMoon / moonOrbitalPeriodFactorEarthRelative;
 
@@ -182,8 +169,6 @@ const moonKinematicRotationSpeed = visualSpeedBaseMultiplier / earthOrbitalPerio
 // For asteroid belt kinematic orbit speed
 const marsOrbitalPeriodFactor = 1.88; 
 const jupiterOrbitalPeriodFactor = 11.86; 
-const marsKinematicOrbitSpeed = visualSpeedBaseMultiplier / marsOrbitalPeriodFactor;
-const jupiterKinematicOrbitSpeed = visualSpeedBaseMultiplier / jupiterOrbitalPeriodFactor;
 
 
 // 3. Create Cameras
