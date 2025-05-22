@@ -75,9 +75,9 @@ const scene = new Scene(engine);
 scene.clearColor = new Color4(0,0,0,1);
 
 // --- Physics Constants ---
-const G = 0.001; // Significantly Reduced G for more stable/slower orbits
+const G = 0.0006; // Significantly Reduced G for more stable/slower orbits
 let simulationTimeScale = 1.0; 
-const physicsTimeStep = 1 / 60; 
+const physicsTimeStep = 1 / 120; 
 let physicsAccumulator = 0;
 
 
@@ -133,10 +133,10 @@ const plutoAxialTiltDegrees = 119.59;
 const visualSpeedBaseMultiplier = (0.00002 * 0.7) * 4; 
 
 // --- Relative Masses ---
-const sunMass = 10000;    // Reduced Sun's mass for better balance with smaller G
+const sunMass = 9000;    // Reduced Sun's mass for better balance with smaller G
 const mercuryMass = 0.055;
 const venusMass = 0.815;
-const earthMass = 100.0;  // Kept Earth's mass high relative to other planets for Moon stability
+const earthMass = 400.0;  // Kept Earth's mass high relative to other planets for Moon stability
 const moonMass = earthMass * 0.0123; 
 const marsMass = 0.107;
 const jupiterMass = 317.8; 
